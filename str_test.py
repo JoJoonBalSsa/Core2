@@ -57,9 +57,7 @@ def inverse_transform_number(data):
     reordered_hex_string = ''.join(reordered_parts)
     return int(reordered_hex_string, 16)
 
-#암호화
-def key_encrypt(key, seed):
-    random.seed(seed)
+def key_encrypt(key):
     H1 = hash_function(R1)
     H2 = hash_function(R2)
     H3 = hash_function(R3)
@@ -72,7 +70,7 @@ def key_encrypt(key, seed):
     X2 = B2 ^ H2
     E = (X2 ^ R3) + H3  # 최종 암호화된 키 생성
     return E
-#복호화
+
 def key_decrypt(encrypted_key):
     H1 = hash_function(R1)
     H2 = hash_function(R2)
@@ -87,8 +85,7 @@ def key_decrypt(encrypted_key):
     key = M1 ^ R1
     return key
 
-def key2_encrypt(key, seed):
-    random.seed(seed)
+def key2_encrypt(key):
     R4 = random.getrandbits(64)
     R5 = random.getrandbits(64)
     R6 = random.getrandbits(64)
@@ -166,29 +163,26 @@ def str_decrypt(data, key, rounds=16):
         decrypted.extend(block)
     return bytes(decrypted).rstrip(b'\x00')
 
-
-#키 파일 생성
 def save_key_to_file(encrypted_key, filename):
     with open(filename, 'w') as file:
         encrypted_key = str(encrypted_key)
         file.write(encrypted_key)
 
-#키 파일 불러오기
 def load_key_from_file(filename):
     with open(filename, 'r') as file:
         return file.read()
     
-def build_def(key, seed, filename):
-    encrypted_key = key_encrypt(key, seed)
+def build_def(key, filename):
+    encrypted_key = key_encrypt(key)
     print(f"Encrypted key: {encrypted_key:016X}")
     save_key_to_file(encrypted_key, filename)
 
-def str_en(filename,seed,plaintext):
+def str_en(filename,plaintext):
     key = load_key_from_file(filename)
     key = int(key)
     decrypted_key = key_decrypt(key)
     print(f"Decrypted key: {decrypted_key:016X}")
-    en_key,R4,R5,R6 = key2_encrypt(decrypted_key,seed)
+    en_key,R4,R5,R6 = key2_encrypt(decrypted_key)
     en_key = en_key.to_bytes(8, byteorder='big')
     encrypted = str_encrypt(plaintext, en_key)
     print("Encrypted:", encrypted)
@@ -196,14 +190,13 @@ def str_en(filename,seed,plaintext):
 
 def str_de(en_key, encrypted):
     decrypted = str_decrypt(encrypted, en_key)
-    print("Decrypted:", decrypted)
     print("Decrypted (as text):", decrypted.decode('utf-8'))
 
 # 테스트
-key = 0x123456789ABCDEF0
-seed = 12345 #key의 앞 5자리 예정
+key = os.urandom(16)
+key = int.from_bytes(key, byteorder='big')
 plaintext = b'This is a test message. It is longer than 16 bytes.'
 filename = "key.txt"
-build_def(key,seed,filename)
-en_key, encrypted = str_en(filename,seed,plaintext)
+build_def(key,filename)
+en_key, encrypted = str_en(filename,plaintext)
 str_de(en_key, encrypted)
