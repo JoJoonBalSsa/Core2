@@ -1,4 +1,5 @@
 from aes import AES
+import os
 
 def test_aes_encryption():
     # AES 인스턴스 생성
@@ -6,7 +7,7 @@ def test_aes_encryption():
 
     # 테스트할 평문과 암호화 키 설정
     plaintext = "Hello, World! This is a test message."
-    encryption_key = "MySecretEncryptionKey"
+    encryption_key = os.urandom(16).hex()
 
     print("원본 평문:", plaintext)
     print("암호화 키:", encryption_key)
