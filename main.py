@@ -1,30 +1,55 @@
-import aes
-import keyObfuscate
+from aes import AES
 import os
-import binascii
 
-AES = aes.AES()
+def test_aes_encryption():
+    # AES 인스턴스 생성
+    aes = AES()
 
+    # 테스트할 평문과 키 생성
+    plaintext = b"Hello, World! This is a test message."
+    key = os.urandom(16)  # 128비트(16바이트) 키 생성
 
-# 테스트
-key = os.urandom(16)  # 16바이트 키
-plaintext = "anothersecurekey1234567890"
+    # 암호화 키 (사용자 지정 문자열)
+    encryption_key = "MySecretEncryptionKey"
 
-print("Key:", binascii.hexlify(key).decode('utf-8'))
-encrypted_key = encrypt_key(key, plaintext)
-print("Encrypted Key:", encrypted_key)
+    print("원본 평문:", plaintext)
+    print("원본 키:", key.hex())
 
-decrypted_key = decrypt_key(encrypted_key, plaintext)
-print("Decrypted Key:", binascii.hexlify(decrypted_key).decode('utf-8'))
+    # 키 암호화
+    encrypted_key = aes.encrypt_key(key, encryption_key)
+    print("암호화된 키:", encrypted_key)
 
+    # 키 복호화
+    decrypted_key = aes.decrypt_key(encrypted_key, encryption_key)
+    print("복호화된 키:", decrypted_key.hex())
 
+    # 평문을 16바이트 블록으로 패딩
+    padded_plaintext = aes.pad(plaintext, 16)
 
+    # 암호화
+    ciphertext = b""
+    for i in range(0, len(padded_plaintext), 16):
+        block = padded_plaintext[i:i+16]
+        encrypted_block = aes.aes_encrypt_block(block, key)
+        ciphertext += encrypted_block
 
+    print("암호문:", ciphertext.hex())
 
-key = 0x123456789ABCDEF0
-seed = 12345 #key의 앞 5자리 예정
-plaintext = b'This is a test message. It is longer than 16 bytes.'
-filename = "key.txt"
-AES.build_def(key,seed,filename)
-en_key, encrypted = AES.str_en(filename,seed,plaintext)
-AES.str_de(en_key, encrypted)
+    # 복호화
+    decrypted_text = b""
+    for i in range(0, len(ciphertext), 16):
+        block = ciphertext[i:i+16]
+        decrypted_block = aes.aes_decrypt_block(block, key)
+        decrypted_text += decrypted_block
+
+    # 패딩 제거
+    unpadded_text = aes.unpad(decrypted_text)
+
+    print("복호화된 평문:", unpadded_text.decode('utf-8'))
+
+    # 원본 평문과 복호화된 평문 비교
+    assert plaintext == unpadded_text, "원본 평문과 복호화된 평문이 일치하지 않습니다."
+    print("테스트 성공: 원본 평문과 복호화된 평문이 일치합니다.")
+
+if __name__ == "__main__":
+    test_aes_encryption()

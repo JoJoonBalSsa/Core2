@@ -174,7 +174,7 @@ class AES:
         prev_block = iv
         for i in range(0, len(encrypted_key), 16):
             block = encrypted_key[i:i+16]
-            decrypted_block = AES.aes_decrypt_block(block, encryption_key)
+            decrypted_block = self.aes_decrypt_block(block, encryption_key)
             decrypted_block = bytes(b1 ^ b2 for b1, b2 in zip(decrypted_block, prev_block))
             decrypted_blocks.append(decrypted_block)
             prev_block = block
@@ -198,7 +198,7 @@ class AES:
         for i in range(0, len(padded_key), 16):
             block = padded_key[i:i+16]
             block = bytes(b1 ^ b2 for b1, b2 in zip(block, prev_block))
-            encrypted_block = AES.aes_encrypt_block(block, encryption_key)
+            encrypted_block = self.aes_encrypt_block(block, encryption_key)
             encrypted_blocks.append(encrypted_block)
             prev_block = encrypted_block
         encrypted_key = iv + b''.join(encrypted_blocks)
