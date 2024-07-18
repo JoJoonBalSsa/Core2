@@ -164,7 +164,7 @@ class AES:
         padding_length = data[-1]
         return data[:-padding_length]
 
-    def decrypt_key(self, encrypted_key, encryption_key):
+    def decrypt_string(self, encrypted_key, encryption_key):
         encryption_key = encryption_key.ljust(32)[:32].encode('utf-8')  # 키를 32바이트로 패딩 또는 잘라내기
         encrypted_key = binascii.unhexlify(encrypted_key)
         iv = encrypted_key[:16]  # 처음 16바이트는 IV
@@ -188,7 +188,7 @@ class AES:
         padding = bytes([padding_length] * padding_length)
         return data + padding
 
-    def encrypt_key(self, key, encryption_key):
+    def encrypt_string(self, key, encryption_key):
         encryption_key = encryption_key.ljust(32)[:32].encode('utf-8')  # 키를 32바이트로 패딩 또는 잘라내기
         iv = os.urandom(16)  # 16바이트 IV 생성
         # AES CBC 모드를 직접 구현
