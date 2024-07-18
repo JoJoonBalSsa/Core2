@@ -1,3 +1,6 @@
+import binascii
+import os
+
 class AES:        
     s_box = [
         0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
@@ -156,62 +159,47 @@ class AES:
         return bytes(state)
 
 
-import os
-import binascii
+    # 복호화 진행
+    def unpad(self, data):
+        padding_length = data[-1]
+        return data[:-padding_length]
 
-# 복호화 진행
-def unpad(data):
-    padding_length = data[-1]
-    return data[:-padding_length]
+    def decrypt_key(self, encrypted_key, encryption_key):
+        encryption_key = encryption_key.ljust(32)[:32].encode('utf-8')  # 키를 32바이트로 패딩 또는 잘라내기
+        encrypted_key = binascii.unhexlify(encrypted_key)
+        iv = encrypted_key[:16]  # 처음 16바이트는 IV
+        encrypted_key = encrypted_key[16:]  # 나머지는 실제 암호화된 키
+        # AES CBC 모드를 직접 구현
+        decrypted_blocks = []
+        prev_block = iv
+        for i in range(0, len(encrypted_key), 16):
+            block = encrypted_key[i:i+16]
+            decrypted_block = AES.aes_decrypt_block(block, encryption_key)
+            decrypted_block = bytes(b1 ^ b2 for b1, b2 in zip(decrypted_block, prev_block))
+            decrypted_blocks.append(decrypted_block)
+            prev_block = block
+        padded_key = b''.join(decrypted_blocks)
+        key = self.unpad(padded_key)
+        return key
 
-def decrypt_key(encrypted_key, encryption_key):
-    encryption_key = encryption_key.ljust(32)[:32].encode('utf-8')  # 키를 32바이트로 패딩 또는 잘라내기
-    encrypted_key = binascii.unhexlify(encrypted_key)
-    iv = encrypted_key[:16]  # 처음 16바이트는 IV
-    encrypted_key = encrypted_key[16:]  # 나머지는 실제 암호화된 키
-    # AES CBC 모드를 직접 구현
-    decrypted_blocks = []
-    prev_block = iv
-    for i in range(0, len(encrypted_key), 16):
-        block = encrypted_key[i:i+16]
-        decrypted_block = AES.aes_decrypt_block(block, encryption_key)
-        decrypted_block = bytes(b1 ^ b2 for b1, b2 in zip(decrypted_block, prev_block))
-        decrypted_blocks.append(decrypted_block)
-        prev_block = block
-    padded_key = b''.join(decrypted_blocks)
-    key = unpad(padded_key)
-    return key
+    # 암호화
+    def pad(self, data, block_size):
+        padding_length = block_size - len(data) % block_size
+        padding = bytes([padding_length] * padding_length)
+        return data + padding
 
-# 암호화
-def pad(data, block_size):
-    padding_length = block_size - len(data) % block_size
-    padding = bytes([padding_length] * padding_length)
-    return data + padding
-
-def encrypt_key(key, encryption_key):
-    encryption_key = encryption_key.ljust(32)[:32].encode('utf-8')  # 키를 32바이트로 패딩 또는 잘라내기
-    iv = os.urandom(16)  # 16바이트 IV 생성
-    # AES CBC 모드를 직접 구현
-    encrypted_blocks = []
-    prev_block = iv
-    padded_key = pad(key, 16)
-    for i in range(0, len(padded_key), 16):
-        block = padded_key[i:i+16]
-        block = bytes(b1 ^ b2 for b1, b2 in zip(block, prev_block))
-        encrypted_block = AES.aes_encrypt_block(block, encryption_key)
-        encrypted_blocks.append(encrypted_block)
-        prev_block = encrypted_block
-    encrypted_key = iv + b''.join(encrypted_blocks)
-    return binascii.hexlify(encrypted_key).decode('utf-8')
-
-# 테스트
-key = os.urandom(16)  # 16바이트 키
-plaintext = "anothersecurekey1234567890"
-
-print("Key:", binascii.hexlify(key).decode('utf-8'))
-encrypted_key = encrypt_key(key, plaintext)
-print("Encrypted Key:", encrypted_key)
-
-decrypted_key = decrypt_key(encrypted_key, plaintext)
-print("Decrypted Key:", binascii.hexlify(decrypted_key).decode('utf-8'))
-
+    def encrypt_key(self, key, encryption_key):
+        encryption_key = encryption_key.ljust(32)[:32].encode('utf-8')  # 키를 32바이트로 패딩 또는 잘라내기
+        iv = os.urandom(16)  # 16바이트 IV 생성
+        # AES CBC 모드를 직접 구현
+        encrypted_blocks = []
+        prev_block = iv
+        padded_key = self.pad(key, 16)
+        for i in range(0, len(padded_key), 16):
+            block = padded_key[i:i+16]
+            block = bytes(b1 ^ b2 for b1, b2 in zip(block, prev_block))
+            encrypted_block = AES.aes_encrypt_block(block, encryption_key)
+            encrypted_blocks.append(encrypted_block)
+            prev_block = encrypted_block
+        encrypted_key = iv + b''.join(encrypted_blocks)
+        return binascii.hexlify(encrypted_key).decode('utf-8')
