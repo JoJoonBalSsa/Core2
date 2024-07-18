@@ -1,7 +1,7 @@
 import os
 import hashlib
-from functools import reduce
 import random
+
 R1 = random.getrandbits(64)
 R2 = random.getrandbits(64)
 R3 = random.getrandbits(64)
