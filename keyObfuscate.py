@@ -1,209 +1,199 @@
-import os
 import hashlib
 import random
 
-R1 = random.getrandbits(64)
-R2 = random.getrandbits(64)
-R3 = random.getrandbits(64)
+class KeyObfuscate:
+    __R1 = 0
+    __R2 = 0
+    __R3 = 0
+    __R4 = 0
+    __R5 = 0
+    __R6 = 0
 
-def left_shift(data, shift_by):
-    return (data << shift_by) & 0xFFFFFFFFFFFFFFFF | (data >> (64 - shift_by))
+    obfuscated_key = 0
 
-def right_shift(data, shift_by):
-    return (data >> shift_by) | (data << (64 - shift_by)) & 0xFFFFFFFFFFFFFFFF
+    def __init__(self, aes_key, key2):            
+        self.__R1 = random.getrandbits(64)
+        self.__R2 = random.getrandbits(64)
+        self.__R3 = random.getrandbits(64)
+        self.__R4 = random.getrandbits(64)
+        self.__R5 = random.getrandbits(64)
+        self.__R6 = random.getrandbits(64)
 
-def bit_inversion(data):
-    return data ^ 0xFFFFFFFFFFFFFFFF
+        enc_aes_key = self.key_encrypt(aes_key)
 
-def hash_function(data):
-    hash_object = hashlib.sha256()
-    hash_object.update(data.to_bytes(8, byteorder='big'))
-    return int.from_bytes(hash_object.digest()[:8], byteorder='big')
+        enc_aes_key = enc_aes_key.to_bytes(16, 'big') 
+        key2_bytes = key2.to_bytes(16, byteorder='big')
+        enc2_aes_key = self.str_encrypt(enc_aes_key, key2_bytes)
+                                      
+        self.obfuscated_key = enc2_aes_key        
 
-def transform_4bit_segments(hex_number):
-    hex_string = f"{hex_number:016X}"
-    segments = [hex_string[i:i+1] for i in range(len(hex_string))]
-    new_segments = []
-    for i in range(0, len(segments), 4):
-        block = segments[i:i+4]
-        reordered_block = [block[2], block[3], block[0], block[1]]
-        new_segments.extend(reordered_block)
-    reordered_hex_string = ''.join(new_segments)
+
+    def left_shift(self, data, shift_by):
+        return (data << shift_by) & 0xFFFFFFFFFFFFFFFF | (data >> (64 - shift_by))
     
-    return int(reordered_hex_string, 16)
 
-def inverse_transform_4bit_segments(hex_number):
-    hex_string = f"{hex_number:016X}"
-    segments = [hex_string[i:i+1] for i in range(len(hex_string))]
-    new_segments = []
-    for i in range(0, len(segments), 4):
-        block = segments[i:i+4]
-        inverse_block = [block[2], block[3], block[0], block[1]]
-        new_segments.extend(inverse_block)
-    reordered_hex_string = ''.join(new_segments)
-    return int(reordered_hex_string, 16)
-
-def transform_number(data):
-    hex_string = f"{data:016X}"
-    parts = [hex_string[i:i+4] for i in range(0, len(hex_string), 4)]
-    reordered_parts = [parts[2], parts[0], parts[3], parts[1]]
-    reordered_hex_string = ''.join(reordered_parts)
-    return int(reordered_hex_string, 16)
-
-def inverse_transform_number(data):
-    hex_string = f"{data:016X}"
-    parts = [hex_string[i:i+4] for i in range(0, len(hex_string), 4)]
-    reordered_parts = [parts[1], parts[3], parts[0], parts[2]]
-    reordered_hex_string = ''.join(reordered_parts)
-    return int(reordered_hex_string, 16)
-
-#암호화
-def key_encrypt(key, seed):
-    random.seed(seed)
-    H1 = hash_function(R1)
-    H2 = hash_function(R2)
-    H3 = hash_function(R3)
-    M1 = key ^ R1
-    S1 = left_shift(M1, 5)  # 5비트 왼쪽으로 shift
-    X1 = S1 ^ H1
-    S2 = right_shift(X1, 3)  # 3비트 오른쪽으로 shift
-    M2 = S2 ^ R2
-    B2 = bit_inversion(M2)
-    X2 = B2 ^ H2
-    E = (X2 ^ R3) + H3  # 최종 암호화된 키 생성
-    return E
-#복호화
-def key_decrypt(encrypted_key):
-    H1 = hash_function(R1)
-    H2 = hash_function(R2)
-    H3 = hash_function(R3)
-    X2 = (encrypted_key - H3) ^ R3
-    B2 = X2 ^ H2
-    M2 = bit_inversion(B2)
-    S2 = M2 ^ R2
-    B1 = left_shift(S2, 3)  # 3비트 왼쪽으로 shift
-    S1 = B1 ^ H1
-    M1 = right_shift(S1, 5)  # 5비트 오른쪽으로 shift
-    key = M1 ^ R1
-    return key
-
-def key2_encrypt(key, seed):
-    random.seed(seed)
-    R4 = random.getrandbits(64)
-    R5 = random.getrandbits(64)
-    R6 = random.getrandbits(64)
-    H1 = hash_function(R4)
-    H2 = hash_function(R5)
-    H3 = hash_function(R6)
-    key = key ^ R1
-    key = left_shift(key,5)
-    key = key ^ H1
-    key = right_shift(key,3)
-    key = key ^ R2
-    key = bit_inversion(key)
-    key = key ^ H2
-    key = transform_number(key)
-    key = key ^ R3
-    key = transform_4bit_segments(key)
-    E = key ^ H3
-    return E, R4, R5, R6
-
-def key2_decrypt(E, R4, R5, R6):
-    H4 = hash_function(R4)
-    H5 = hash_function(R5)
-    H6 = hash_function(R6)
-    key = E ^ H4
-    key = inverse_transform_4bit_segments(key)
-    key = key ^ R4
-    key = inverse_transform_number(key)
-    key = key ^ H5
-    key = bit_inversion(key)
-    key = key ^ R5
-    key = left_shift(key, 3)
-    key = key ^ H6
-    key = right_shift(key, 5)
-    key = key ^ R6
-    return key
-
-def key_schedule(key, rounds):
-    schedule = [key]
-    for i in range(1, rounds):
-        new_key = hashlib.sha256(schedule[-1]).digest()
-        schedule.append(new_key)
-    return schedule
-
-def feistel_network(block, round_key):
-    left, right = block[:8], block[8:]
-    f_result = bytes(a ^ b for a, b in zip(right, round_key[:8]))
-    new_right = bytes(a ^ b for a, b in zip(left, f_result))
-    return right + new_right
-
-def inverse_feistel_network(block, round_key):
-    left, right = block[:8], block[8:]
-    f_result = bytes(a ^ b for a, b in zip(left, round_key[:8]))
-    new_left = bytes(a ^ b for a, b in zip(right, f_result))
-    return new_left + left
-
-def str_encrypt(data, key, rounds=16):
-    key_sched = key_schedule(key, rounds)
-    encrypted = bytearray()
-    for i in range(0, len(data), 16):
-        block = data[i:i+16]
-        if len(block) < 16:
-            block = block.ljust(16, b'\x00')
-        for round_key in key_sched:
-            block = feistel_network(block, round_key)
-        encrypted.extend(block)
-    return bytes(encrypted)
-
-def str_decrypt(data, key, rounds=16):
-    key_sched = key_schedule(key, rounds)
-    decrypted = bytearray()
-    for i in range(0, len(data), 16):
-        block = data[i:i+16]
-        for round_key in reversed(key_sched):
-            block = inverse_feistel_network(block, round_key)
-        decrypted.extend(block)
-    return bytes(decrypted).rstrip(b'\x00')
-
-
-#키 파일 생성
-def save_key_to_file(encrypted_key, filename):
-    with open(filename, 'w') as file:
-        encrypted_key = str(encrypted_key)
-        file.write(encrypted_key)
-
-#키 파일 불러오기
-def load_key_from_file(filename):
-    with open(filename, 'r') as file:
-        return file.read()
+    def right_shift(self, data, shift_by):
+        return (data >> shift_by) | (data << (64 - shift_by)) & 0xFFFFFFFFFFFFFFFF
     
-def build_def(key, seed, filename):
-    encrypted_key = key_encrypt(key, seed)
-    print(f"Encrypted key: {encrypted_key:016X}")
-    save_key_to_file(encrypted_key, filename)
 
-def str_en(filename,seed,plaintext):
-    key = load_key_from_file(filename)
-    key = int(key)
-    decrypted_key = key_decrypt(key)
-    print(f"Decrypted key: {decrypted_key:016X}")
-    en_key,R4,R5,R6 = key2_encrypt(decrypted_key,seed)
-    en_key = en_key.to_bytes(8, byteorder='big')
-    encrypted = str_encrypt(plaintext, en_key)
-    print("Encrypted:", encrypted)
-    return en_key, encrypted
+    def bit_inversion(self, data):
+        return data ^ 0xFFFFFFFFFFFFFFFF
+    
 
-def str_de(en_key, encrypted):
-    decrypted = str_decrypt(encrypted, en_key)
-    print("Decrypted:", decrypted)
-    print("Decrypted (as text):", decrypted.decode('utf-8'))
+    def hash_function(self, data):
+        hash_object = hashlib.sha256()
+        hash_object.update(data.to_bytes(8, byteorder='big'))
+        return int.from_bytes(hash_object.digest()[:8], byteorder='big')
+    
 
-# 테스트
-key = 0x123456789ABCDEF0
-seed = 12345 #key의 앞 5자리 예정
-plaintext = b'This is a test message. It is longer than 16 bytes.'
-filename = "key.txt"
-build_def(key,seed,filename)
-en_key, encrypted = str_en(filename,seed,plaintext)
-str_de(en_key, encrypted)
+    def transform_4bit_segments(self, hex_number):
+        hex_string = f"{hex_number:016X}"
+        segments = [hex_string[i:i+1] for i in range(len(hex_string))]
+        new_segments = []
+        for i in range(0, len(segments), 4):
+            block = segments[i:i+4]
+            reordered_block = [block[2], block[3], block[0], block[1]]
+            new_segments.extend(reordered_block)
+        reordered_hex_string = ''.join(new_segments)
+        
+        return int(reordered_hex_string, 16)
+    
+
+    def inverse_transform_4bit_segments(self, hex_number):
+        hex_string = f"{hex_number:016X}"
+        segments = [hex_string[i:i+1] for i in range(len(hex_string))]
+        new_segments = []
+        for i in range(0, len(segments), 4):
+            block = segments[i:i+4]
+            inverse_block = [block[2], block[3], block[0], block[1]]
+            new_segments.extend(inverse_block)
+        reordered_hex_string = ''.join(new_segments)
+        return int(reordered_hex_string, 16)
+    
+
+    def transform_number(self, data):
+        hex_string = f"{data:016X}"
+        parts = [hex_string[i:i+4] for i in range(0, len(hex_string), 4)]
+        reordered_parts = [parts[2], parts[0], parts[3], parts[1]]
+        reordered_hex_string = ''.join(reordered_parts)
+        return int(reordered_hex_string, 16)
+    
+
+    def inverse_transform_number(self, data):
+        hex_string = f"{data:016X}"
+        parts = [hex_string[i:i+4] for i in range(0, len(hex_string), 4)]
+        reordered_parts = [parts[1], parts[3], parts[0], parts[2]]
+        reordered_hex_string = ''.join(reordered_parts)
+        return int(reordered_hex_string, 16)
+    
+
+    def key_encrypt(self, key):
+        H1 = self.hash_function(self.__R1)
+        H2 = self.hash_function(self.__R2)
+        H3 = self.hash_function(self.__R3)
+        M1 = key ^ self.__R1
+        S1 = self.left_shift(M1, 5)  # 5비트 왼쪽으로 shift
+        X1 = S1 ^ H1
+        S2 = self.right_shift(X1, 3)  # 3비트 오른쪽으로 shift
+        M2 = S2 ^ self.__R2
+        B2 = self.bit_inversion(M2)
+        X2 = B2 ^ H2
+        E = (X2 ^ self.__R3) + H3  # 최종 암호화된 키 생성
+        return E
+    
+
+    def key_decrypt(self, encrypted_key):
+        H1 = self.hash_function(self.__R1)
+        H2 = self.hash_function(self.__R2)
+        H3 = self.hash_function(self.__R3)
+        X2 = (encrypted_key - H3) ^ self.__R3
+        B2 = X2 ^ H2
+        M2 = self.bit_inversion(B2)
+        S2 = M2 ^ self.__R2
+        B1 = self.left_shift(S2, 3)  # 3비트 왼쪽으로 shift
+        S1 = B1 ^ H1
+        M1 = self.right_shift(S1, 5)  # 5비트 오른쪽으로 shift
+        key = M1 ^ self.__R1
+        return key
+    
+
+    def key_schedule(self, key, rounds):
+        schedule = [key]
+        for i in range(1, rounds):
+            new_key = hashlib.sha256(schedule[-1]).digest()
+            schedule.append(new_key[:16])  # 16바이트로 제한
+        return schedule
+
+    def feistel_network(self, block, round_key):
+        left, right = block[:8], block[8:]
+        f_result = bytes(a ^ b for a, b in zip(right, round_key[:8]))
+        new_right = bytes(a ^ b for a, b in zip(left, f_result))
+        return right + new_right
+
+
+    def inverse_feistel_network(self, block, round_key):
+        left, right = block[:8], block[8:]
+        f_result = bytes(a ^ b for a, b in zip(left, round_key[:8]))
+        new_left = bytes(a ^ b for a, b in zip(right, f_result))
+        return new_left + left
+
+
+    def str_encrypt(self, data, key, rounds=16):
+        key_sched = self.key_schedule(key, rounds)
+        encrypted = bytearray()
+        for i in range(0, len(data), 16):
+            block = data[i:i+16]
+            if len(block) < 16:
+                block = block.ljust(16, b'\x00')
+            for round_key in key_sched:
+                block = self.feistel_network(block, round_key)
+            encrypted.extend(block)
+        return bytes(encrypted)
+
+
+    def str_decrypt(self, data, key, rounds=16):
+        key_sched = self.key_schedule(key, rounds)
+        decrypted = bytearray()
+        for i in range(0, len(data), 16):
+            block = data[i:i+16]
+            for round_key in reversed(key_sched):
+                block = self.inverse_feistel_network(block, round_key)
+            decrypted.extend(block)
+        return bytes(decrypted).rstrip(b'\x00')
+    
+
+
+
+    # def key2_encrypt(self, key):
+    #     H1 = self.hash_function(self.____R4)
+    #     H2 = self.hash_function(self.__R5)
+    #     H3 = self.hash_function(self.__R6)
+    #     key = key ^ self.__R1
+    #     key = self.left_shift(key,5)
+    #     key = key ^ H1
+    #     key = self.right_shift(key,3)
+    #     key = key ^ self.__R2
+    #     key = self.bit_inversion(key)
+    #     key = key ^ H2
+    #     key = self.transform_number(key)
+    #     key = key ^ self.__R3
+    #     key = self.transform_4bit_segments(key)
+    #     E = key ^ H3
+    #     return E  
+
+    # def key2_decrypt(self, E):
+    #     H4 = self.hash_function(self.__R4)
+    #     H5 = self.hash_function(self.__R5)
+    #     H6 = self.hash_function(self.__R6)
+    #     key = E ^ H4
+    #     key = self.inverse_transform_4bit_segments(key)
+    #     key = key ^ self.__R4
+    #     key = self.inverse_transform_number(key)
+    #     key = key ^ H5
+    #     key = self.bit_inversion(key)
+    #     key = key ^ self.__R5
+    #     key = self.left_shift(key, 3)
+    #     key = key ^ H6
+    #     key = self.right_shift(key, 5)
+    #     key = key ^ self.__R6
+    #     return key
