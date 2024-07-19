@@ -8,16 +8,17 @@ class KeyObfuscate:
     __R4 = 0
     __R5 = 0
     __R6 = 0
+    
 
     obfuscated_key = 0
-
+    
     def __init__(self, aes_key, key2):            
-        self.__R1 = random.getrandbits(64)
-        self.__R2 = random.getrandbits(64)
-        self.__R3 = random.getrandbits(64)
-        self.__R4 = random.getrandbits(64)
-        self.__R5 = random.getrandbits(64)
-        self.__R6 = random.getrandbits(64)
+        self.__R1 = self.round(aes_key,7,key2)
+        self.__R2 = self.round(aes_key,5,key2)
+        self.__R3 = self.round(aes_key,12,key2)
+        self.__R4 = self.round(aes_key,8,key2)
+        self.__R5 = self.round(aes_key,9,key2)
+        self.__R6 = self.round(aes_key,3,key2)
 
         enc_aes_key = self.key_encrypt(aes_key)
 
@@ -197,3 +198,11 @@ class KeyObfuscate:
         key = self.right_shift(key, 5)
         key = key ^ self.__R4
         return key
+    
+    def round(self, key, round, key2):
+        for i in range(round):
+            H = self.transform_number(key)
+            H = H ^ key2
+            H = self.transform_4bit_segments(H)
+            H = H ^ self.hash_function(key2)
+        return H
