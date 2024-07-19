@@ -9,11 +9,6 @@ class KeyObfuscate:
     # __R5 = 0
     # __R6 = 0
 
-    obfuscated_key = 0
-
-    def __init__(self, aes_key, key2):
-        self.obfuscated_key = self.key_encrypt(aes_key, key2)  
-
 
     # def alg1_init_rval(self):                  
     #     self.__R1 = random.getrandbits(64)
