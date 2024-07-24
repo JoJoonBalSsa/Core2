@@ -1,3 +1,4 @@
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,6 +46,7 @@ public class AES {
         0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36
     };
 
+    // Galois Field multiplication function
     private static int galoisMult(int a, int b) {
         int p = 0;
         int hiBitSet;
@@ -62,6 +64,7 @@ public class AES {
         return p & 0xFF;
     }
 
+    // Key expansion function
     private static int[] keyExpansion(byte[] key) {
         int[] expandedKey = new int[176];
         for (int i = 0; i < key.length; i++) {
@@ -72,12 +75,14 @@ public class AES {
         for (int i = 4; i < 44; i++) {
             int[] temp = { expandedKey[(i - 1) * 4], expandedKey[(i - 1) * 4 + 1], expandedKey[(i - 1) * 4 + 2], expandedKey[(i - 1) * 4 + 3] };
             if (i % 4 == 0) {
+                // Rotate
                 int t = temp[0];
                 temp[0] = temp[1];
                 temp[1] = temp[2];
                 temp[2] = temp[3];
                 temp[3] = t;
 
+                // SubBytes using S_BOX (assuming S_BOX is defined elsewhere)
                 for (int j = 0; j < 4; j++) {
                     temp[j] = sBox(temp[j]);
                 }
@@ -91,6 +96,7 @@ public class AES {
         return expandedKey;
     }
 
+    // AddRoundKey function
     private static byte[] addRoundKey(byte[] state, int[] roundKey) {
         byte[] newState = new byte[state.length];
         for (int i = 0; i < state.length; i++) {
@@ -99,6 +105,7 @@ public class AES {
         return newState;
     }
 
+    // SubBytes function
     private static byte[] subBytes(byte[] state) {
         byte[] newState = new byte[state.length];
         for (int i = 0; i < state.length; i++) {
@@ -107,6 +114,7 @@ public class AES {
         return newState;
     }
 
+    // ShiftRows function
     private static byte[] shiftRows(byte[] state) {
         return new byte[] {
             state[0], state[5], state[10], state[15],
@@ -116,6 +124,7 @@ public class AES {
         };
     }
 
+    // MixColumns function
     private static byte[] mixColumns(byte[] state) {
         byte[] newState = new byte[state.length];
         for (int i = 0; i < 4; i++) {
@@ -128,6 +137,7 @@ public class AES {
         return newState;
     }
 
+    // AES encryption function
     public static byte[] aesEncryptBlock(byte[] plaintext, byte[] key) {
         byte[] state = plaintext.clone();
         int[] expandedKey = keyExpansion(key);
@@ -146,6 +156,7 @@ public class AES {
         return state;
     }
 
+    // AES decryption functions
     private static byte[] invShiftRows(byte[] state) {
         return new byte[] {
             state[0], state[13], state[10], state[7],
@@ -194,8 +205,21 @@ public class AES {
         return state;
     }
 
+    // Substitution box function (sBox and invSBox methods to be implemented)
+    private static int sBox(int value) {
+        // Placeholder implementation
+        // Replace this with actual S_BOX lookup
+        return value;
+    }
+
+    private static int invSBox(int value) {
+        // Placeholder implementation
+        // Replace this with actual INV_S_BOX lookup
+        return value;
+    }
+
     public static byte[] decryptKey(byte[] encryptedKey, byte[] encryptionKey) {
-        encryptionKey = Arrays.copyOf(encryptionKey, 32);
+        encryptionKey = Arrays.copyOf(encryptionKey, 32); // Pad or truncate key to 32 bytes
         byte[] iv = Arrays.copyOfRange(encryptedKey, 0, 16);
         byte[] cipherText = Arrays.copyOfRange(encryptedKey, 16, encryptedKey.length);
 
