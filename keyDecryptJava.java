@@ -6,7 +6,7 @@ import java.util.Base64;
 import java.util.List;
 
 public class Main {
-    public static List<byte[]> alg2_key_schedule(byte[] key, int rounds) throws NoSuchAlgorithmException {
+    public static List<byte[]> key_schedule(byte[] key, int rounds) throws NoSuchAlgorithmException {
         List<byte[]> schedule = new ArrayList<>();
         schedule.add(key);
 
@@ -18,7 +18,7 @@ public class Main {
         return schedule;
     }
 
-    public static byte[] alg2_inverse_feistel_network(byte[] block, byte[] roundKey) {
+    public static byte[] inverse_feistel_network(byte[] block, byte[] roundKey) {
         byte[] left = Arrays.copyOfRange(block, 0, 8);
         byte[] right = Arrays.copyOfRange(block, 8, 16);
         byte[] f_result = new byte[8];
@@ -32,13 +32,13 @@ public class Main {
         return concatenate(newLeft, left);
     }
 
-    public static byte[] alg2_decrypt(byte[] data, byte[] key, int rounds) throws NoSuchAlgorithmException {
-        List<byte[]> keySched = alg2_key_schedule(key, rounds);
+    public static byte[] key_decrypt_alg(byte[] data, byte[] key, int rounds) throws NoSuchAlgorithmException {
+        List<byte[]> keySched = key_schedule(key, rounds);
         byte[] decrypted = new byte[data.length];
         for (int i = 0; i < data.length; i += 16) {
             byte[] block = Arrays.copyOfRange(data, i, i + 16);
             for (int j = keySched.size() - 1; j >= 0; j--) {
-                block = alg2_inverse_feistel_network(block, keySched.get(j));
+                block = inverse_feistel_network(block, keySched.get(j));
             }
             System.arraycopy(block, 0, decrypted, i, 16);
         }
@@ -59,17 +59,42 @@ public class Main {
         }
         return Arrays.copyOf(data, i + 1);
     }
+
+    public static byte[] key_decrypt(String key, String key2) throws NoSuchAlgorithmException {
+        String base_key = key.concat("==");
+        String base_key2 = key2.concat("=");
+
+        byte[] deckey = Base64.getDecoder().decode(base_key);
+        byte[] deckey2 = Base64.getDecoder().decode(base_key2);
+
+        byte[] decrypted_key = key_decrypt_alg(deckey, deckey2, 16);
+
+        return decrypted_key;
+    }
+
+    public static void exampleUsage() throws NoSuchAlgorithmException {
+        //base64 encoded encrypted aes key's
+        String key = "XH/vCWbu5we6dsge+MoN+w";
+        //base64 encoded key of encrypted aes key(not for string encrypt)
+        String key2 = "/zRuAnBg1NA";
+        //base64 encoded original aes key
+        String original_key = "Lnr4x+NC2k5dh28mgopMqA==";
+
+        //decrypt aes key
+        byte[] aes_key = key_decrypt(key, key2);
+
+        //encode and compare with original key
+        aes_key = Base64.getEncoder().encode(aes_key);
+        System.out.println("original key =" + original_key);
+        System.out.println("dectypted key =" + new String(aes_key));
+    }
+
     public static void main(String[] args) throws NoSuchAlgorithmException {
-        String key2 = "/rRXgwxk/Lk=";
-        String key = "JfZkXxiIIxpXR0hJIuEgQw==";
-        byte[] deckey = Base64.getDecoder().decode(key);
-        byte[] deckey2 = Base64.getDecoder().decode(key2);
-
-        byte[] asdf = alg2_decrypt(deckey, deckey2, 16);
-
-        byte[] asdf2 = Base64.getEncoder().encode(asdf);
-        System.out.println(new String(asdf2));
+        exampleUsage();
     }
 }
+
+
+
 
 
