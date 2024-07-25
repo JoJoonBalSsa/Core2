@@ -6,7 +6,7 @@ import java.util.Base64;
 import java.util.List;
 
 class KeyDecrypt {
-    public static List<byte[]> keySchedule(byte[] key, int rounds) throws NoSuchAlgorithmException {
+    private static List<byte[]> keySchedule(byte[] key, int rounds) throws NoSuchAlgorithmException {
         List<byte[]> schedule = new ArrayList<>();
         schedule.add(key);
 
@@ -18,7 +18,7 @@ class KeyDecrypt {
         return schedule;
     }
 
-    public static byte[] inverseFeistelNetwork(byte[] block, byte[] roundKey) {
+    private static byte[] inverseFeistelNetwork(byte[] block, byte[] roundKey) {
         byte[] left = Arrays.copyOfRange(block, 0, 8);
         byte[] right = Arrays.copyOfRange(block, 8, 16);
         byte[] f_result = new byte[8];
@@ -32,7 +32,7 @@ class KeyDecrypt {
         return concatenate(newLeft, left);
     }
 
-    public static byte[] keyDecryptAlg(byte[] data, byte[] key, int rounds) throws NoSuchAlgorithmException {
+    private static byte[] keyDecryptAlg(byte[] data, byte[] key, int rounds) throws NoSuchAlgorithmException {
         List<byte[]> keySched = keySchedule(key, rounds);
         byte[] decrypted = new byte[data.length];
         for (int i = 0; i < data.length; i += 16) {
