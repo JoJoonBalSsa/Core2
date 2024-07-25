@@ -5,6 +5,8 @@ import os
 class stringObfuscate:
     aes_key = 0
     key_key = 0
+
+    
     def __init__(self):
         self.encryption_key = os.urandom(16)
         self.key_key = os.urandom(16)
