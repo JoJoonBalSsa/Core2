@@ -3,13 +3,16 @@ import os
 import base64
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
+from keyObfuscate import KeyObfuscate
 #from aes import AES
 
 class Encrypt_str:
     def __init__(self, aes_key=None):
-        self.aes_key = base64.b64encode(os.urandom(16)).decode('utf-8')
-        self.enc_aes_key = os.urandom(16).hex()
-        self.enc_enc_aes_key = os.urandom(16).hex()
+        self.aes_key = os.urandom(16)
+        self.enc_aes_key = os.urandom(8)
+        self.ko = KeyObfuscate()
+        self.encrypted_aes_key = None
+
         self.count = 0 # 복호화 코드 삽입할 소스코드
         self.random = 1 # 랜덤으로 소스코드 정하기
         self.decryptor_package = None
@@ -35,8 +38,8 @@ class Encrypt_str:
         return string_literals
     
     def encrypt(self, plain_text, key):
-        key_bytes = base64.b64decode(key)  # Convert key to bytes
-        cipher = AES.new(key_bytes, AES.MODE_ECB)
+        #key_bytes = base64.b64decode(key)  # Convert key to bytes
+        cipher = AES.new(key, AES.MODE_ECB)
         padded_text = pad(plain_text.encode('utf-8'), AES.block_size)
         encrypted_text = cipher.encrypt(padded_text)
         return base64.b64encode(encrypted_text).decode('utf-8')
@@ -79,10 +82,13 @@ class Encrypt_str:
         decryption_code = f"""
         static{{
 		try {{
-			Class<?> decryptorClass = Class.forName("christmas.AES");
-        Method decryptMethod = decryptorClass.getMethod("decrypt", String.class, String.class);
+        Class<?> decryptorClass1 = Class.forName("christmas.decrypt_key");
+        Method decryptMethod1 = decryptorClass1.getMethod("key_decrypt", String.class, String.class);
+        
+		Class<?> decryptorClass2 = Class.forName("christmas.AES");
+        Method decryptMethod2 = decryptorClass2.getMethod("decrypt", String.class, byte[].class);
         for (int i = 0; i < STRING_LITERALS_{class_name.upper()}.length; i++) {{
-        STRING_LITERALS_{class_name.upper()}[i] = (String) decryptMethod.invoke(null, STRING_LITERALS_{class_name.upper()}[i], ENCRYPTION_KEY_{class_name.upper()}); 
+        STRING_LITERALS_{class_name.upper()}[i] = (String) decryptMethod2.invoke(null, STRING_LITERALS_{class_name.upper()}[i], (byte[]) decryptMethod1.invoke(null,ENC_ENCRYPTION_KEY_{class_name.upper()},ENCRYPTION_KEY_{class_name.upper()})); 
         }}
 		}} catch (Exception e) {{
 		}}
@@ -93,16 +99,15 @@ class Encrypt_str:
         return '\n'.join(lines)
     
     def insert_encryption_key(self, source_code, class_name, class_position, encryption_key): # 키를 난독화하여 문자열에 추가하는 함수
-        key_declaration = f'private static final String ENCRYPTION_KEY_{class_name.upper()} = "{encryption_key}";\n'
+        key_declaration = f'private static final String ENC_ENCRYPTION_KEY_{class_name.upper()} = "{base64.b64encode(self.encrypted_aes_key).decode('utf-8').replace("=","")}";\n'
+        key_declaration += f'private static final String ENCRYPTION_KEY_{class_name.upper()} = "{base64.b64encode(self.enc_aes_key).decode('utf-8').replace("=","")}";\n'
         lines = source_code.split('\n')
         lines.insert(class_position+1, key_declaration)
         return '\n'.join(lines)
 
 
-    def encrypt_aes_key(self, aes_key):
-        encrypted_aes_key = self.aes.encrypt_string(aes_key.encode('utf-8'), self.enc_aes_key)
-        encrypted_enc_aes_key = self.aes.encrypt_string(encrypted_aes_key.encode('utf-8'), self.enc_enc_aes_key)
-        return encrypted_enc_aes_key
+    def encrypt_aes_key(self):
+        self.encrypted_aes_key = self.ko.key_encrypt(self.aes_key, self.enc_aes_key)
     
     # def insert_decryptor_class(self, source_code, decryptor_class_path):
     #     with open(decryptor_class_path, 'r', encoding='utf-8') as file:
@@ -113,18 +118,22 @@ class Encrypt_str:
     #     lines.append(decryptor_code)
     #     return '\n'.join(lines)
     
-    def insert_decryptor_class(self,source_code, decryptor_class_path):
+    def insert_decryptor_class(self,source_code, decryptor_class_path, key_decryptor_class_path):
         with open(decryptor_class_path, 'r', encoding='utf-8') as file:
             decryptor_code = file.read()
+        with open(key_decryptor_class_path,'r',encoding='utf-8') as file:
+            key_decryptor_code = file.read()
 
         lines = source_code.split('\n')
 
         decryptor_code = decryptor_code.split('\n')
         decryptor_code = [line for line in decryptor_code if not line.startswith('import')]
         decryptor_code = '\n'.join(decryptor_code)
+        key_decryptor_code = key_decryptor_code.split('\n')
+        key_decryptor_code = [line for line in key_decryptor_code if not line.startswith('import')]
+        key_decryptor_code = '\n'.join(key_decryptor_code)
 
-
-        # Import 문 추가
+        # Import 문 추가    
         import_statements = [
             'import javax.crypto.Cipher;',
 'import javax.crypto.KeyGenerator;',
@@ -132,6 +141,13 @@ class Encrypt_str:
 'import javax.crypto.spec.SecretKeySpec;',
 'import java.util.Base64;',
 'import java.lang.reflect.Method;'
+'import java.security.MessageDigest;'
+'import java.security.NoSuchAlgorithmException;',
+'import java.util.ArrayList;',
+'import java.util.Arrays;',
+'import java.util.Base64;',
+'import java.util.List;'
+
         ]
         for import_statement in import_statements:
             if import_statement not in lines:
@@ -139,6 +155,7 @@ class Encrypt_str:
 
         # AESDecryptor 클래스 추가
         lines.append(decryptor_code)
+        lines.append(key_decryptor_code)
 
         return '\n'.join(lines)
 
@@ -148,7 +165,7 @@ class Encrypt_str:
                 return node.name
         return None
     
-    def process_java_files(self, java_files,decryptor_class_path):
+    def process_java_files(self, java_files,decryptor_class_path,key_cecryptor_class_path):
         for file_path, tree, source_code in java_files:
             class_declarations = []
             self.decryptor_package = self.get_package_name(tree)
@@ -169,12 +186,12 @@ class Encrypt_str:
 
                 updated_source_code = self.insert_encrypted_string_array(updated_source_code, encrypted_literals, class_name, class_position) #소스코드에 배열 삽입
 
-                #encrypted_key = self.encrypt_aes_key(self.aes_key) # 키를 두번 암호화 # 일단 테스트로 암호화 없이
+                self.encrypt_aes_key() # 키 암호화
 
                 updated_source_code = self.insert_encryption_key(updated_source_code, class_name, class_position, self.aes_key) # 암호화 키 삽입
                 
                 if self.count == self.random:
-                    updated_source_code = self.insert_decryptor_class(updated_source_code, decryptor_class_path)  # 복호화 클래스 삽입
+                    updated_source_code = self.insert_decryptor_class(updated_source_code, decryptor_class_path,key_cecryptor_class_path)  # 복호화 클래스 삽입
                     self.decryptor_class = class_name
 
                 with open(file_path, 'w', encoding='utf-8') as file:
@@ -187,8 +204,9 @@ def main():
     encryptor = Encrypt_str()
     java_files = encryptor.parse_java_files(java_folder_path) 
     decryptor_class_path = 'C:/Users/조준형/Desktop/S개발자_프로젝트/AES.java' 
+    key_decryptor_class_path = "C:/Users/조준형/Desktop/S개발자_프로젝트/Core2/keyDecryptJava.java"
 
-    encryptor.process_java_files(java_files,decryptor_class_path) 
+    encryptor.process_java_files(java_files,decryptor_class_path,key_decryptor_class_path) 
 
 if __name__ == "__main__":
     main()

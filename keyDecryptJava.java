@@ -5,7 +5,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 
-public class Main {
+class decrypt_key {
     public static List<byte[]> key_schedule(byte[] key, int rounds) throws NoSuchAlgorithmException {
         List<byte[]> schedule = new ArrayList<>();
         schedule.add(key);
@@ -61,36 +61,15 @@ public class Main {
     }
 
     public static byte[] key_decrypt(String key, String key2) throws NoSuchAlgorithmException {
-        String base_key = key.concat("==");
-        String base_key2 = key2.concat("=");
+        //String base_key = key.concat("==");
+        //String base_key2 = key2.concat("=");
 
-        byte[] deckey = Base64.getDecoder().decode(base_key);
-        byte[] deckey2 = Base64.getDecoder().decode(base_key2);
+        byte[] deckey = Base64.getDecoder().decode(key);
+        byte[] deckey2 = Base64.getDecoder().decode(key2);
 
         byte[] decrypted_key = key_decrypt_alg(deckey, deckey2, 16);
 
         return decrypted_key;
-    }
-
-    public static void exampleUsage() throws NoSuchAlgorithmException {
-        //base64 encoded encrypted aes key's
-        String key = "XH/vCWbu5we6dsge+MoN+w";
-        //base64 encoded key of encrypted aes key(not for string encrypt)
-        String key2 = "/zRuAnBg1NA";
-        //base64 encoded original aes key
-        String original_key = "Lnr4x+NC2k5dh28mgopMqA==";
-
-        //decrypt aes key
-        byte[] aes_key = key_decrypt(key, key2);
-
-        //encode and compare with original key
-        aes_key = Base64.getEncoder().encode(aes_key);
-        System.out.println("original key =" + original_key);
-        System.out.println("dectypted key =" + new String(aes_key));
-    }
-
-    public static void main(String[] args) throws NoSuchAlgorithmException {
-        exampleUsage();
     }
 }
 
