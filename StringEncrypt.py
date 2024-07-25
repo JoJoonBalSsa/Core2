@@ -63,7 +63,7 @@ class Encrypt_str:
 
     def  insert_encrypted_string_array(self,source_code, encrypted_literals, class_name, class_position): # 문자열이 원래 있던 자리를 배열참조로 바꿈
         # 지금은 STRING_LITERALS_{class 이름} 인데 바꿔도됨
-        array_declaration = f'public static final String[] STRING_LITERALS_{class_name.upper()} = {{\n' + ',\n'.join(f'"{literal}"' for literal in encrypted_literals) + '\n};\n'
+        array_declaration = f'public static final String[] STRING_LITERALS_{class_name.upper()} = {{' + ','.join(f'"{literal}"' for literal in encrypted_literals) + '\n};\n'
         lines = source_code.split('\n')
         lines.insert(class_position, array_declaration)
         reflection = 'import java.lang.reflect.Method;'
@@ -80,20 +80,7 @@ class Encrypt_str:
         # """
 
         decryption_code = f"""
-        static{{
-		try {{
-        Class<?> decryptorClass1 = Class.forName("christmas.decrypt_key");
-        Method decryptMethod1 = decryptorClass1.getMethod("key_decrypt", String.class, String.class);
-        
-		Class<?> decryptorClass2 = Class.forName("christmas.AES");
-        Method decryptMethod2 = decryptorClass2.getMethod("decrypt", String.class, byte[].class);
-        for (int i = 0; i < STRING_LITERALS_{class_name.upper()}.length; i++) {{
-        STRING_LITERALS_{class_name.upper()}[i] = (String) decryptMethod2.invoke(null, STRING_LITERALS_{class_name.upper()}[i], (byte[]) decryptMethod1.invoke(null,ENC_ENCRYPTION_KEY_{class_name.upper()},ENCRYPTION_KEY_{class_name.upper()})); 
-        }}
-		}} catch (Exception e) {{
-		}}
-		
-        }}
+        static{{try {{Class<?> decryptorClass1 = Class.forName("christmas.decrypt_key");Method decryptMethod1 = decryptorClass1.getMethod("key_decrypt", String.class, String.class);Class<?> decryptorClass2 = Class.forName("christmas.AES");Method decryptMethod2 = decryptorClass2.getMethod("decrypt", String.class, byte[].class);for (int i = 0; i < STRING_LITERALS_{class_name.upper()}.length; i++) {{STRING_LITERALS_{class_name.upper()}[i] = (String) decryptMethod2.invoke(null, STRING_LITERALS_{class_name.upper()}[i], (byte[]) decryptMethod1.invoke(null,ENC_ENCRYPTION_KEY_{class_name.upper()},ENCRYPTION_KEY_{class_name.upper()})); }}}} catch (Exception e) {{}}}}
         """
         lines.insert(class_position + 2, decryption_code)
         return '\n'.join(lines)
