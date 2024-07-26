@@ -5,10 +5,9 @@ import java.util.Base64;
 import java.lang.reflect.Method;
 
 class StringDecrypt {
-    public static String decryptString(String encryptedText, String key) {
+    public static String decryptString(String encryptedText, byte[] key) {
         try {
-            byte[] keyBytes = Base64.getDecoder().decode(key);
-            SecretKeySpec secretKey = new SecretKeySpec(keyBytes, "AES");
+            SecretKeySpec secretKey = new SecretKeySpec(key, "AES");
 
             Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
             cipher.init(Cipher.DECRYPT_MODE, secretKey);

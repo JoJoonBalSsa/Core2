@@ -6,6 +6,10 @@ from Crypto.Util.Padding import pad
 from keyObfuscate import KeyObfuscate
 
 
+count = 0 # decryptor 소스코드 삽입할 소스코드
+random = 1
+decryptor_package = None
+cur_decryptor_package = None
 class StringObfuscate:
     def __init__(self, class_name, class_position):
         self.class_name = class_name
@@ -16,8 +20,7 @@ class StringObfuscate:
 
         self.encrypted_aes_key = None
         self.lines = None
-        self.count = 0 # 복호화 코드 삽입할 소스코드
-        self.random = 1 # 랜덤으로 소스코드 정하기
+
         self.decryptor_package = None
         self.decryptor_class = None
         
@@ -26,7 +29,7 @@ class StringObfuscate:
         self.lines = source_code.split('\n')
 
 
-    def string_obfuscate(self, string_literals):
+    def string_obfuscate(self, string_literals,source_code):
         encrypted_literals = self.encrypt_string_literals(string_literals) #문자열 암호화
         self.replace_string_literals(string_literals) #문자열 호출을 복호화된 배열참조로 변경
         self.insert_encrypted_string_array(encrypted_literals) #소스코드에 배열 삽입
@@ -54,10 +57,10 @@ class StringObfuscate:
             end_column_index = column_index + len(literal)
             new_line = line[:column_index] + f'STRING_LITERALS_{self.class_name.upper()}[{index}]' + line[end_column_index:]
             self.lines[line_index] = new_line
-            self.lines = '\n'.join(self.lines)
 
 
     def insert_encrypted_string_array(self, encrypted_literals):
+        global decryptor_package
         # 문자열이 원래 있던 자리를 배열참조로 바꿈
         # 지금은 STRING_LITERALS_{class 이름} 인데 바꿔도됨
         array_declaration = f'public static final String[] STRING_LITERALS_{self.class_name.upper()} = {{' + ','.join(f'"{literal}"' for literal in encrypted_literals) + '\n};\n'
@@ -68,11 +71,13 @@ class StringObfuscate:
                 self.lines.insert(1, reflection)
 
         # 복호화 코드 삽입
-        # TO-DO : 클래스 이름 동적할당 필요?
+        # TO-DO : 클래스 이름 동적할당 필요? ㅇㅇ
+        decryptor_package = cur_decryptor_package if decryptor_package == None else decryptor_package
+
         decryption_code = f"""
-            static{{try {{Class<?> decryptorClass1 = Class.forName("christmas.KeyDecrypt");
+            static{{try {{Class<?> decryptorClass1 = Class.forName("{decryptor_package}.KeyDecrypt");
             Method decryptMethod1 = decryptorClass1.getMethod("keyDecrypt", String.class, String.class);
-            Class<?> decryptorClass2 = Class.forName("christmas.StringDecrypt");
+            Class<?> decryptorClass2 = Class.forName("{decryptor_package}.StringDecrypt");
             Method decryptMethod2 = decryptorClass2.getMethod("decryptString", String.class, byte[].class);
             for (int i = 0; i < STRING_LITERALS_{self.class_name.upper()}.length; i++) 
             {{STRING_LITERALS_{self.class_name.upper()}[i] = 
@@ -83,7 +88,7 @@ class StringObfuscate:
         """
 
         self.lines.insert(self.class_position + 2, decryption_code)
-        self.lines = '\n'.join(self.lines)
+        #self.lines = '\n'.join(self.lines)
 
         # decryption_code = f"""
         # static {{
@@ -93,14 +98,17 @@ class StringObfuscate:
         # }}
         # """
     def key_obfuscate(self):
+        global decryptor_package
         self.encrypt_aes_key() # 키 암호화
         self.insert_encryption_key() # 암호화 키 삽입
 
-        if self.count == self.random:
-            decryptor_class_path = 'C:/Users/조준형/Desktop/S개발자_프로젝트/AES.java' 
-            key_decryptor_class_path = "C:/Users/조준형/Desktop/S개발자_프로젝트/Core2/keyDecryptJava.java"
+        if count == random:
+            decryptor_class_path = 'C:/Users/조준형/Desktop/S개발자_프로젝트/Core2/stringDecrypt.java' 
+            key_decryptor_class_path = "C:/Users/조준형/Desktop/S개발자_프로젝트/Core2/keyDecrypt.Java"
             self.insert_decryptor_class(decryptor_class_path, key_decryptor_class_path)  # 복호화 클래스 삽입
-            self.decryptor_class = self.class_name
+            decryptor_package = cur_decryptor_package
+        
+        self.lines = '\n'.join(self.lines)
 
 
     def encrypt_aes_key(self):
@@ -113,10 +121,12 @@ class StringObfuscate:
         key_declaration += f'private static final String ENCRYPTION_KEY_{self.class_name.upper()} = "{base64.b64encode(self.enc_aes_key).decode('utf-8').replace("=","")}";\n'
 
         self.lines.insert(self.class_position + 1, key_declaration)
-        self.lines = '\n'.join(self.lines)
+        #self.lines = '\n'.join(self.lines)
     
 
     def insert_decryptor_class(self, decryptor_class_path, key_decryptor_class_path):
+        decryptor_code = None
+        key_decryptor_code = None
         with open(decryptor_class_path, 'r', encoding='utf-8') as file:
             decryptor_code = file.read()
         with open(key_decryptor_class_path,'r',encoding='utf-8') as file:
@@ -151,8 +161,6 @@ class StringObfuscate:
         # AESDecryptor 클래스 추가
         self.lines.append(decryptor_code)
         self.lines.append(key_decryptor_code)
-
-        self.lines = '\n'.join(self.lines)
     
     #   with open(decryptor_class_path, 'r', encoding='utf-8') as file:
     #       decryptor_code = file.read()        
@@ -192,26 +200,30 @@ def extract_string_literals(tree): # AST 에서 문자열 찾아내고 문자열
         return string_literals
 
 
-def obfuscate(source_code, tree, class_declarations): #, decryptor_class_path, key_decryptor_class_path):
+def obfuscate(source_code, tree, class_declarations,file_path): #, decryptor_class_path, key_decryptor_class_path):
+        global count
         for class_name, class_position in class_declarations:
             string_literals = extract_string_literals(tree) # 클래스에 존재하는 문자열들 추출
             if not string_literals:
                         continue
-            
+
             encrypt_str = StringObfuscate(class_name, class_position)
             encrypt_str.split_source_code(source_code)
-            encrypt_str.count += 1
+            count += 1
 
             # 문자열 난독화
-            encrypt_str.string_obfuscate(string_literals)
+            encrypt_str.string_obfuscate(string_literals,source_code)
 
             # aes키 난독화
             encrypt_str.key_obfuscate() 
 
-            return encrypt_str.lines
+            with open(file_path, 'w', encoding='utf-8') as file:
+                file.write(encrypt_str.lines)
+            
 
 
 def main():
+    global cur_decryptor_package
     # java_folder_path = 'C:/Users/조준형/Desktop/S개발자_프로젝트/Core2/test'  
     java_folder_path = 'C:/Users/조준형/Desktop/S개발자_프로젝트/Core2/test'  
 
@@ -222,16 +234,13 @@ def main():
 
     for file_path, tree, source_code in java_files:
         class_declarations = []
-
-        # encrypt_str.decryptor_package = get_package_name(tree)
+        cur_decryptor_package = get_package_name(tree)
         for path, node in tree:
             if isinstance(node, javalang.tree.ClassDeclaration): #클래스 별로 문자열을 추출할것이기 때문에 클래스 정의 위치 알아냄
                 class_declarations.append((node.name, node.position[0]))
 
-                updated_source_code = obfuscate(source_code, tree, class_declarations) #,decryptor_class_path,key_decryptor_class_path) 
+                obfuscate(source_code, tree, class_declarations,file_path) #,decryptor_class_path,key_decryptor_class_path) 
 
-                with open(file_path, 'w', encoding='utf-8') as file:
-                    file.write(updated_source_code)
 
 if __name__ == "__main__":
     main()
