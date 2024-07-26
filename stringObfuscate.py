@@ -11,11 +11,15 @@ class StringObfuscate:
         self.aes_key = os.urandom(16)
         self.enc_aes_key = os.urandom(8)
         self.encrypted_aes_key = None
-
+        self.lines = None
         self.count = 0 # 복호화 코드 삽입할 소스코드
         self.random = 1 # 랜덤으로 소스코드 정하기
         self.decryptor_package = None
         self.decryptor_class = None
+
+
+    def split_source_code(self, source_code):
+        self.lines = source_code.split('\n')
 
 
     def encrypt_string_literals(self, string_literals): # 암호화
@@ -31,36 +35,35 @@ class StringObfuscate:
         return base64.b64encode(encrypted_text).decode('utf-8')
     
 
-    def replace_string_literals(self, source_code, string_literals, class_name):
-        lines = source_code.split('\n')
+    def replace_string_literals(self, string_literals, class_name):
         string_literals_sorted = sorted(string_literals, key=lambda x: (x[1][0], -x[1][1]))  # 라인 오른쪽부터 문자열 변환
         for index, (literal, position) in enumerate(string_literals_sorted):
             line_index = position[0] - 1
             column_index = position[1] - 1
-            line = lines[line_index]
+            line = self.lines[line_index]
             end_column_index = column_index + len(literal)
             new_line = line[:column_index] + f'STRING_LITERALS_{class_name.upper()}[{index}]' + line[end_column_index:]
-            lines[line_index] = new_line
-        return '\n'.join(lines)
+            self.lines[line_index] = new_line
+            self.lines = '\n'.join(self.lines)
 
 
-    def insert_encrypted_string_array(self,source_code, encrypted_literals, class_name, class_position): # 문자열이 원래 있던 자리를 배열참조로 바꿈
+    def insert_encrypted_string_array(self, encrypted_literals, class_name, class_position):
+        # 문자열이 원래 있던 자리를 배열참조로 바꿈
         # 지금은 STRING_LITERALS_{class 이름} 인데 바꿔도됨
         array_declaration = f'public static final String[] STRING_LITERALS_{class_name.upper()} = {{' + ','.join(f'"{literal}"' for literal in encrypted_literals) + '\n};\n'
-        lines = source_code.split('\n')
-        lines.insert(class_position, array_declaration)
+        
+        self.lines.insert(class_position, array_declaration)
         reflection = 'import java.lang.reflect.Method;'
-        if reflection not in lines:
-                lines.insert(1, reflection)
+        if reflection not in self.lines:
+                self.lines.insert(1, reflection)
 
         # 복호화 코드 삽입
-        # TO-DO : 클래스 이름 동적할당 필요
+        # TO-DO : 클래스 이름 동적할당 필요?
         decryption_code = f"""
         static{{try {{Class<?> decryptorClass1 = Class.forName("christmas.KeyDecrypt");Method decryptMethod1 = decryptorClass1.getMethod("keyDecrypt", String.class, String.class);Class<?> decryptorClass2 = Class.forName("christmas.StringDecrypt");Method decryptMethod2 = decryptorClass2.getMethod("decryptString", String.class, byte[].class);for (int i = 0; i < STRING_LITERALS_{class_name.upper()}.length; i++) {{STRING_LITERALS_{class_name.upper()}[i] = (String) decryptMethod2.invoke(null, STRING_LITERALS_{class_name.upper()}[i], (byte[]) decryptMethod1.invoke(null,ENC_ENCRYPTION_KEY_{class_name.upper()},ENCRYPTION_KEY_{class_name.upper()})); }}}} catch (Exception e) {{}}}}
         """
-        lines.insert(class_position + 2, decryption_code)
-        return '\n'.join(lines)
-    
+        self.lines.insert(class_position + 2, decryption_code)
+        self.lines = '\n'.join(self.lines)
 
         # decryption_code = f"""
         # static {{
@@ -71,26 +74,24 @@ class StringObfuscate:
         # """
     
 
-    def insert_encryption_key(self, source_code, class_name, class_position, encryption_key): # 키를 난독화하여 문자열에 추가하는 함수
-        key_declaration = f'private static final String ENC_ENCRYPTION_KEY_{class_name.upper()} = "{base64.b64encode(self.encrypted_aes_key).decode('utf-8').replace("=","")}";\n'
-        key_declaration += f'private static final String ENCRYPTION_KEY_{class_name.upper()} = "{base64.b64encode(self.enc_aes_key).decode('utf-8').replace("=","")}";\n'
-        lines = source_code.split('\n')
-        lines.insert(class_position+1, key_declaration)
-        return '\n'.join(lines)
-
-
     def encrypt_aes_key(self):
         ko = KeyObfuscate(self.aes_key, self.enc_aes_key)
         self.encrypted_aes_key = ko.enc_aes_key
+
+
+    def insert_encryption_key(self, class_name, class_position): # 키를 난독화하여 문자열에 추가하는 함수
+        key_declaration = f'private static final String ENC_ENCRYPTION_KEY_{class_name.upper()} = "{base64.b64encode(self.encrypted_aes_key).decode('utf-8').replace("=","")}";\n'
+        key_declaration += f'private static final String ENCRYPTION_KEY_{class_name.upper()} = "{base64.b64encode(self.enc_aes_key).decode('utf-8').replace("=","")}";\n'
+
+        self.lines.insert(class_position+1, key_declaration)
+        self.lines = '\n'.join(self.lines)
     
 
-    def insert_decryptor_class(self,source_code, decryptor_class_path, key_decryptor_class_path):
+    def insert_decryptor_class(self, decryptor_class_path, key_decryptor_class_path):
         with open(decryptor_class_path, 'r', encoding='utf-8') as file:
             decryptor_code = file.read()
         with open(key_decryptor_class_path,'r',encoding='utf-8') as file:
             key_decryptor_code = file.read()
-
-        lines = source_code.split('\n')
 
         decryptor_code = decryptor_code.split('\n')
         decryptor_code = [line for line in decryptor_code if not line.startswith('import')]
@@ -115,20 +116,22 @@ class StringObfuscate:
             'import java.util.List;'
         ]
         for import_statement in import_statements:
-            if import_statement not in lines:
-                lines.insert(1, import_statement)
+            if import_statement not in self.lines:
+                self.lines.insert(1, import_statement)
 
         # AESDecryptor 클래스 추가
-        lines.append(decryptor_code)
-        lines.append(key_decryptor_code)
+        self.lines.append(decryptor_code)
+        self.lines.append(key_decryptor_code)
 
-        return '\n'.join(lines)
+        self.lines = '\n'.join(self.lines)
     
     #   with open(decryptor_class_path, 'r', encoding='utf-8') as file:
     #       decryptor_code = file.read()        
     #   lines = source_code.split('\n')
     #   lines.append(decryptor_code)
     #   return '\n'.join(lines)
+    
+
 
 
 def get_package_name(tree): 
@@ -163,6 +166,7 @@ def extract_string_literals(tree): # AST 에서 문자열 찾아내고 문자열
 def execute(java_files,decryptor_class_path,key_cecryptor_class_path):
     for file_path, tree, source_code in java_files:
         class_declarations = []
+
         # encrypt_str.decryptor_package = get_package_name(tree)
         for path, node in tree:
             if isinstance(node, javalang.tree.ClassDeclaration): #클래스 별로 문자열을 추출할것이기 때문에 클래스 정의 위치 알아냄
@@ -182,23 +186,25 @@ def execute(java_files,decryptor_class_path,key_cecryptor_class_path):
 def run(source_code, decryptor_class_path, key_cecryptor_class_path, class_name, class_position, string_literals):  
     encrypt_str = StringObfuscate()
 
+    encrypt_str.split_source_code(source_code)
+
     encrypt_str.count += 1
 
     encrypted_literals = encrypt_str.encrypt_string_literals(string_literals) #문자열 암호화
 
-    encrypted_strings = encrypt_str.replace_string_literals(source_code, string_literals, class_name) #문자열 호출을 복호화된 배열참조로 변경
+    encrypt_str.replace_string_literals(string_literals, class_name) #문자열 호출을 복호화된 배열참조로 변경
 
-    updated_source_code = encrypt_str.insert_encrypted_string_array(encrypted_strings, encrypted_literals, class_name, class_position) #소스코드에 배열 삽입
+    encrypt_str.insert_encrypted_string_array(encrypted_literals, class_name, class_position) #소스코드에 배열 삽입
 
     encrypt_str.encrypt_aes_key() # 키 암호화
 
-    updated_source_code = encrypt_str.insert_encryption_key(updated_source_code, class_name, class_position, encrypt_str.aes_key) # 암호화 키 삽입
+    encrypt_str.insert_encryption_key(class_name, class_position, encrypt_str.aes_key) # 암호화 키 삽입
     
     if encrypt_str.count == encrypt_str.random:
-        updated_source_code = encrypt_str.insert_decryptor_class(updated_source_code, decryptor_class_path,key_cecryptor_class_path)  # 복호화 클래스 삽입
+        encrypt_str.insert_decryptor_class(decryptor_class_path, key_cecryptor_class_path)  # 복호화 클래스 삽입
         encrypt_str.decryptor_class = class_name
     
-    return updated_source_code
+    return encrypt_str.lines
 
 
 def main():
