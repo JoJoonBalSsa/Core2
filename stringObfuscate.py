@@ -8,8 +8,8 @@ from keyObfuscate import KeyObfuscate
 
 count = 0 # decryptor 소스코드 삽입할 소스코드
 random = 1
-decryptor_package = None
-cur_decryptor_package = None
+
+
 class StringObfuscate:
     def __init__(self, class_name, class_position):
         self.class_name = class_name
@@ -72,6 +72,7 @@ class StringObfuscate:
 
         # 복호화 코드 삽입
         # TO-DO : 클래스 이름 동적할당 필요? ㅇㅇ
+        # cur_decryptor_package는 global 선언 없음!
         decryptor_package = cur_decryptor_package if decryptor_package == None else decryptor_package
 
         decryption_code = f"""
@@ -103,8 +104,8 @@ class StringObfuscate:
         self.insert_encryption_key() # 암호화 키 삽입
 
         if count == random:
-            decryptor_class_path = 'C:/Users/조준형/Desktop/S개발자_프로젝트/Core2/stringDecrypt.java' 
-            key_decryptor_class_path = "C:/Users/조준형/Desktop/S개발자_프로젝트/Core2/keyDecrypt.Java"
+            decryptor_class_path = './stringDecrypt.java' 
+            key_decryptor_class_path = "./keyDecrypt.Java"
             self.insert_decryptor_class(decryptor_class_path, key_decryptor_class_path)  # 복호화 클래스 삽입
             decryptor_package = cur_decryptor_package
         
@@ -221,16 +222,14 @@ def obfuscate(source_code, tree, class_declarations,file_path): #, decryptor_cla
                 file.write(encrypt_str.lines)
             
 
-
 def main():
-    global cur_decryptor_package
+    decryptor_package = None
+    cur_decryptor_package = ""
+    
     # java_folder_path = 'C:/Users/조준형/Desktop/S개발자_프로젝트/Core2/test'  
-    java_folder_path = 'C:/Users/조준형/Desktop/S개발자_프로젝트/Core2/test'  
+    java_folder_path = './test'  
 
     java_files = parse_java_files(java_folder_path)
-
-    # decryptor_class_path = 'C:/Users/조준형/Desktop/S개발자_프로젝트/AES.java' 
-    # key_decryptor_class_path = "C:/Users/조준형/Desktop/S개발자_프로젝트/Core2/keyDecryptJava.java"
 
     for file_path, tree, source_code in java_files:
         class_declarations = []
@@ -239,7 +238,7 @@ def main():
             if isinstance(node, javalang.tree.ClassDeclaration): #클래스 별로 문자열을 추출할것이기 때문에 클래스 정의 위치 알아냄
                 class_declarations.append((node.name, node.position[0]))
 
-                obfuscate(source_code, tree, class_declarations,file_path) #,decryptor_class_path,key_decryptor_class_path) 
+                obfuscate(source_code, tree, class_declarations, file_path) #,decryptor_class_path,key_decryptor_class_path) 
 
 
 if __name__ == "__main__":
