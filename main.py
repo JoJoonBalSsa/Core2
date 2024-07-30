@@ -1,33 +1,18 @@
-from aes import AES
-import os
+from search_str import searchString
+from encrypt_str import encryptString
+from insert_str import insertStr
+def main(java_folder_path, output_folder):
+    search_str = searchString(java_folder_path)
+    random_classes = search_str.random_class(search_str.class_names)
 
-def test_aes_encryption():
-    # AES 인스턴스 생성
-    aes = AES()
+    encrypt_str = encryptString(search_str.Literals)
 
-    # 테스트할 평문과 암호화 키 설정
-    plaintext = "Hello, World! This is a test message."
-    encryption_key = os.urandom(16).hex()
+    insert_str = insertStr(search_str.Literals,encrypt_str.encrypted_Literals,random_classes,java_folder_path)
 
-    print("원본 평문:", plaintext)
-    print("암호화 키:", encryption_key)
-
-    # 평문을 바이트로 변환
-    plaintext_bytes = plaintext.encode('utf-8')
-
-    # 암호화
-    encrypted_string = aes.encrypt_string(plaintext_bytes, encryption_key)
-    print("암호화된 문자열:", encrypted_string)
-
-    # 복호화
-    decrypted_bytes = aes.decrypt_string(encrypted_string, encryption_key)
-    decrypted_string = decrypted_bytes.decode('utf-8')
-
-    print("복호화된 평문:", decrypted_string)
-
-    # 원본 평문과 복호화된 평문 비교
-    assert plaintext == decrypted_string, "원본 평문과 복호화된 평문이 일치하지 않습니다."
-    print("테스트 성공: 원본 평문과 복호화된 평문이 일치합니다.")
+    
 
 if __name__ == "__main__":
-    test_aes_encryption()
+
+    #java_folder_path = '/home/namaek_2/java-christmas-6-scienceNH'
+    java_folder_path = 'C:/Users/조준형/Desktop/S개발자_프로젝트/test/christmas'  
+    main(java_folder_path, java_folder_path)
