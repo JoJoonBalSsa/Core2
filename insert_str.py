@@ -63,7 +63,7 @@ class insertStr:
                 if self.key_decrypt[0] == package_name and self.key_decrypt[1] == class_name:
                     decryptor_code = None
                     key_decryptor_code = None
-                    key_decryptor_class_path = "C:/Users/조준형/Desktop/S개발자_프로젝트/test/keyDecrypt.java"
+                    key_decryptor_class_path = "C:/Users/조준형/Desktop/S개발자_프로젝트/test/Core2/keyDecrypt.java"
 
                     with open(key_decryptor_class_path,'r',encoding='utf-8') as file:
                         key_decryptor_code = file.read()
@@ -117,7 +117,7 @@ class insertStr:
 
                     decryptor_code = None
                     key_decryptor_code = None
-                    key_decryptor_class_path = "C:/Users/조준형/Desktop/S개발자_프로젝트/test/stringDecrypt.java"
+                    key_decryptor_class_path = "C:/Users/조준형/Desktop/S개발자_프로젝트/test/Core2/stringDecrypt.java"
 
                     with open(key_decryptor_class_path,'r',encoding='utf-8') as file:
                         key_decryptor_code = file.read()

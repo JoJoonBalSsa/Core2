@@ -40,6 +40,7 @@ class searchString:
                     self.class_names.append([package_name,class_name])
                     for sub_path,sub_node in node:
                         if isinstance(sub_node, javalang.tree.Literal) and isinstance(sub_node.value, str) and sub_node.value.startswith('"') and sub_node.value.endswith('"'):
+                            #literal = sub_node.value[1:-1]
                             string_literals.append((sub_node.value, sub_node.position))
                     Literals.append([package_name,class_name,string_literals]) # 클래스 별로 문자열 추출
 
