@@ -4,11 +4,11 @@
     "*": "int resultObfuscated = 0; for(int i = 0; i < {b}; i++) { resultObfuscated += (~obj.myFunction(~{a}, 1) + 1); }",
     "/": "int resultObfuscated = 0; int temp = a; int bInverted = ~obj.myFunction(~b, 1) + 1; while (temp >= bInverted) { temp -= bInverted; resultObfuscated++;}",
     "%": "{a} - (int temp = {a}; int bInverted = ~obj.myFunction(~{b}, 1) + 1; while (temp >= bInverted) { temp -= bInverted; } temp * {b})",
-    "++":"",
-    "--":"",
-    "!":"",
-    "==":"",
-    "!=":"",
+    "++":"", //전위후위 판별필요
+    "--":"", //전위후위 판별필요
+    "!":"{a} ? ({b} ? false : ({c} ? false : false)) : ({d} ? true : true)",
+    "==":"({a} != {b}) ? ({b} ? false : ({c} ? false : false)) : ({d} ? true : true)",
+    "!=":"({a} == {b}) ? ({b} ? false : ({c} ? false : false)) : ({d} ? true : true)",
     ">":"",
     "<":"",
     ">=":"",
