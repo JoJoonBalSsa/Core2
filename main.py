@@ -14,5 +14,5 @@ def main(java_folder_path, output_folder):
 if __name__ == "__main__":
 
     #java_folder_path = '/home/namaek_2/java-christmas-6-scienceNH'
-    java_folder_path = 'C:/Users/조준형/Desktop/S개발자_프로젝트/test/christmas'  
+    java_folder_path = './test/christmas'  
     main(java_folder_path, java_folder_path)
