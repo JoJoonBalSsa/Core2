@@ -1,37 +1,192 @@
 import javalang
 import os
 import json
+import re
 
 class obfuscate_Op:
-    def __init__(self,java_folder):
+    def __init__(self,java_folder): # 연산자 우선순위 정하고, load_obfucation(난독화 DB 불러오기) , __extract_conditions (조건 추출)
+        self.file = None
+        self.OPERATOR_PRECEDENCE = {
+    '~': 14,  
+    '!': 14, 
+    '++': 14,
+    '*': 13, '/': 13, '%': 13,
+    '+': 12, '-': 12,
+    '<<': 11, '>>': 11, '>>>': 11,
+    '<': 10, '>': 10, '<=': 10, '>=': 10,
+    '==': 9, '!=': 9,
+    '&': 8,
+    '^': 7,
+    '|': 6,
+    '&&': 5,
+    '||': 4,
+    '?:': 3,
+    '=': 2, '+=': 2, '-=': 2, '*=': 2, '/=': 2, '%=': 2,
+    '&=': 2, '|=': 2, '^=': 2,
+    '<<=': 2, '>>=': 2, '>>>=': 2,
+    '.': 1,
+    '()': 1,
+    '[]': 1,
+    '::': 1
+}
+            
         self.ob_json = self.load_obfuscation_map('C:/Users/조준형/Desktop/S개발자_프로젝트/obfuscate_if_for/culDB.json')
         self.files = self.parse_java_files(java_folder)
-        self.__extract_conditions(self.files)#조건문,반복문 식별 후 연산자 추출
+        self.__extract_conditions(self.files) #조건문,반복문 식별 후 연산자 추출
 
 
-    def load_obfuscation_map(self,json_file_path):
+    def load_obfuscation_map(self, json_file_path):
         with open(json_file_path, 'r', encoding='utf-8') as file:
             ob_json = json.load(file)
         return ob_json
+    
+    def preprocess_expression(self, expression):
+        expression = re.sub(r'([a-zA-Z_]\w*)\s*\(([^()]*?)\)', r'\1(\2)', expression)
+        expression = re.sub(r'(?<!\d)0(?!\d)', '00', expression)
+        return expression
+    
 
-    def obfuscate_expression(self,condition):
 
-        # JSON 파일에서 정의한 연산자 변환 적용
-        for original, obfuscated in self.ob_json.items():
-            condition = condition.replace(original, obfuscated)
+    def remove_whitespace(self,text):
+        return ''.join(text.split())
 
-        return condition
+    def replace_expression_without_whitespace(self,original_line, expression, new_expression):
+        # 공백을 제거한 후 비교
+        clean_line = self.remove_whitespace(original_line)
+        clean_expression = self.remove_whitespace(expression)
+
+
+        if clean_expression in clean_line:
+            # 공백을 포함한 원래 라인에서 대체
+            return clean_line.replace(clean_expression, new_expression).replace("else","else ")
+        return clean_line
+    
+    def obfuscate_expression(self, expression):
+        if not expression or expression.isspace():
+            return expression
+
+        # Preprocess the expression before tokenizing
+        preprocessed_expr = self.preprocess_expression(expression)
+
+        try:
+            tokens = list(javalang.tokenizer.tokenize(preprocessed_expr))
+        except Exception as e:
+            print(f"error tokenizing expression '{preprocessed_expr}': {e}")
+            return expression 
+
+        operators = []
+        operands = []
+
+        current_operand = ""
+        last_position = None
+        first_operand_type = None
+        first_operand_name = None
+
+        for token in tokens:
+            if isinstance(token, javalang.tokenizer.Keyword):
+                first_operand_type = token.value  # 첫 번째 변수의 타입 저장
+                current_operand = ""  # 타입을 따로 저장하고 초기화
+                last_position = token.position
+
+            elif isinstance(token, javalang.tokenizer.Operator):
+                if current_operand:
+                    if not first_operand_name:
+                        first_operand_name = current_operand.strip()  # 첫 번째 변수 이름 저장
+                    operands.append((current_operand.strip(), last_position))
+                    current_operand = ""
+                operators.append((token.value, token.position))
+
+            elif isinstance(token, (javalang.tokenizer.Identifier, javalang.tokenizer.Literal)):
+                if current_operand:
+                    current_operand += token.value
+                else:
+                    current_operand = token.value
+                last_position = token.position
+
+            elif token.value == '.':
+                current_operand += '.'
+
+            elif token.value in ('(', ')'):
+                current_operand += token.value
+
+        if current_operand:
+            if not first_operand_name:
+                first_operand_name = current_operand.strip()  # 첫 번째 변수 이름 저장
+            operands.append((current_operand.strip(), last_position))
+
+        obfuscated_expr = self.recursive_obfuscate(operators, operands)
+
+        # 첫 번째 변수에만 타입을 붙임 (선언 부분)
+        if first_operand_type and first_operand_name:
+            obfuscated_expr = obfuscated_expr.replace(first_operand_name, f'{first_operand_type} {first_operand_name}', 1)
+
+        return obfuscated_expr
+
+    def recursive_obfuscate(self, operators, operands):
+        if not operators:
+            return operands[0][0]
+
+        try:
+            max_precedence = max(self.OPERATOR_PRECEDENCE[op[0]] for op in operators)
+        except ValueError:            
+            return operands[0][0]
+
+
+        try:
+            index = next(i for i, op in enumerate(operators) if self.OPERATOR_PRECEDENCE[op[0]] == max_precedence)
+        except StopIteration:
+            return operands[0][0]
+
+        left_operand = operands[index][0]
+        operator = operators[index][0]
+        right_operand = operands[index + 1][0]
+
+        obfuscated_expression = self.ob_json[operator].format(a=left_operand, b=right_operand)
+
+        new_operands = operands[:index] + [(obfuscated_expression, operands[index][1])] + operands[index + 2:]
+        new_operators = operators[:index] + operators[index + 1:]
+
+        return self.recursive_obfuscate(new_operators, new_operands)
+
+
+    def extract_for_parts(self, for_expression):
+        # for 문 내에서 세미콜론(;)을 기준으로 초기화, 조건, 증감 부분을 추출
+        parts = for_expression.split(';')
+        if len(parts) == 3:
+            init_part = parts[0].strip()
+            condition_part = parts[1].strip()
+            increment_part = parts[2].strip()
+            return init_part, condition_part, increment_part
+        else:
+            raise ValueError("Invalid for loop expression")
     
     def insert_ob_op(self,file_path,code, conditions):
         lines = code.split('\n')
 
         for condition_type, condition, position in conditions:
 
-            if condition_type == "If": # if 문 후에 중괄호가 올수도있고 안올수도있음 중괄호가 어디에 위치해 있는지도 알아야함
+            if condition_type == "If" or condition_type == "While":
                 line = lines[position[0] - 1]
+                self.file = file_path # 디버깅
                 updated_line = self.obfuscate_expression(condition)
-                lines[position[0] - 1] = line.replace(condition,updated_line)
+                lines[position[0] - 1] = self.replace_expression_without_whitespace(line,condition,updated_line)
+            
+            elif condition_type == "For":
+                line = lines[position[0] - 1]
+                self.file = file_path  # 디버깅용
 
+                # For 문에서 초기화, 조건, 증감 부분을 추출
+                init_part, condition_part, increment_part = self.extract_for_parts(condition)
+
+                # 각 부분을 난독화
+                obfuscated_init = self.obfuscate_expression(init_part)
+                obfuscated_condition = self.obfuscate_expression(condition_part)
+                obfuscated_increment = increment_part #self.obfuscate_expression(increment_part) #일단 후위 전위 연산 넣을때까진 주석처리
+
+                # 난독화된 부분들을 결합하여 최종 for 문 구성
+                updated_line = f"{obfuscated_init}; {obfuscated_condition}; {obfuscated_increment}"
+
+                lines[position[0] - 1] = self.replace_expression_without_whitespace(line, condition, updated_line)
 
         code = '\n'.join(lines)
         with open(file_path, 'w', encoding='utf-8') as file:
@@ -43,13 +198,8 @@ class obfuscate_Op:
 
     def __extract_conditions(self,files):
         for file_path, tree , code in files:
-            conditions = self.extract_conditions(tree)
-            print(f'File: {file_path}')
-            self.insert_ob_op(file_path,code,conditions)
-                #print(f'{condition_type} statement at line {position.line}, column {position.column}:')
-                #print(f'Condition: {condition}')
-                #여기다가 난독화 후 코드 삽입 부분 추가
-            #print()
+            conditions = self.extract_conditions(tree) #여기서 IF,FOR 등등 식별
+            self.insert_ob_op(file_path,code,conditions) #난독화 코드 삽입
 
     def parse_java_files(self,folder_path):
         java_files = []
@@ -96,6 +246,7 @@ class obfuscate_Op:
             declarators = ', '.join(self.expression_to_string(decl) for decl in expr.declarators)
             return f'{type_str} {declarators}'
         elif isinstance(expr, javalang.tree.Assignment):
+            print(expr)
             return f'{self.expression_to_string(expr.expressionl)} {expr.operator} {self.expression_to_string(expr.value)}'
         elif isinstance(expr, javalang.tree.EnhancedForControl):
             return f'{expr.var.name} : {self.expression_to_string(expr.iterable)}'
