@@ -1,33 +1,24 @@
-from aes import AES
-import os
+from obfuscate_op import obfuscate_Op
+from obfuscate_extract import JavaControlFlowExtractor
 
-def test_aes_encryption():
-    # AES 인스턴스 생성
-    aes = AES()
+def main():
+    java_code = """
+for(int i = 0 ;i<50;i++){
+}
+"""
+    expressions = JavaControlFlowExtractor(java_code).extract_all_conditions()
+    ob_op = obfuscate_Op()
 
-    # 테스트할 평문과 암호화 키 설정
-    plaintext = "Hello, World! This is a test message."
-    encryption_key = os.urandom(16).hex()
+    for key, value in expressions.items():
+        if value:  # 값이 비어있지 않은 경우만 처리
+            for cond in value:
+                    obfuscated = ob_op.obfuscate_expression(cond)
+                    #replace(cond,obfuscated) 
+                    print(obfuscated)
+    
+    
 
-    print("원본 평문:", plaintext)
-    print("암호화 키:", encryption_key)
 
-    # 평문을 바이트로 변환
-    plaintext_bytes = plaintext.encode('utf-8')
-
-    # 암호화
-    encrypted_string = aes.encrypt_string(plaintext_bytes, encryption_key)
-    print("암호화된 문자열:", encrypted_string)
-
-    # 복호화
-    decrypted_bytes = aes.decrypt_string(encrypted_string, encryption_key)
-    decrypted_string = decrypted_bytes.decode('utf-8')
-
-    print("복호화된 평문:", decrypted_string)
-
-    # 원본 평문과 복호화된 평문 비교
-    assert plaintext == decrypted_string, "원본 평문과 복호화된 평문이 일치하지 않습니다."
-    print("테스트 성공: 원본 평문과 복호화된 평문이 일치합니다.")
 
 if __name__ == "__main__":
-    test_aes_encryption()
+    main()
