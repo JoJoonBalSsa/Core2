@@ -36,14 +36,16 @@ class obfuscate_Op:
     def obfuscate_expression(self, expression):
         #print(f"Starting obfuscation for expression: {expression}")
 
+        ob_expression = None
+
         # 괄호 안의 내용부터 재귀적으로 처리
-        expression = self.process_parentheses(expression)
+        ob_expression = self.process_parentheses(expression)
 
         # 모든 난독화가 끝난 후  임시 기호를 원래의 난독화된 표현으로 대체 (괄호 포함)
         for key, value in sorted(self.obfuscation_map.items(), reverse=True):
-            expression = expression.replace(key, f"({value})")
+            ob_expression = ob_expression.replace(key, f"({value})")
 
-        return expression
+        return ob_expression
 
     def process_parentheses(self, expression):
         # 괄호 안의 내용을 재귀적으로 먼저 처리
