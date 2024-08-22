@@ -21,14 +21,10 @@ class JavaControlFlowExtractor:
         return do_while_pattern.findall(self.java_code)
 
     def extract_all_conditions(self):
-        if_conditions = self.find_if_conditions()
-        for_conditions = self.find_for_conditions()
-        while_conditions = self.find_while_conditions()
-        do_while_conditions = self.find_do_while_conditions()
+        expressions = []
+        expressions.append(self.find_if_conditions())
+        expressions.append(self.find_for_conditions())
+        expressions.append(self.find_while_conditions())
+        expressions.append(self.find_do_while_conditions())
 
-        return {
-            "if_conditions": if_conditions,
-            "for_conditions": for_conditions,
-            "while_conditions": while_conditions,
-            "do_while_conditions": do_while_conditions,
-        }
+        return expressions
