@@ -3,8 +3,8 @@ from obfuscate_extract import JavaControlFlowExtractor
 
 def main():
     java_code = """
-
-if(((a+b) == 34) && ((a-b) == -6 )){
+    
+if((a+b == 34) && (!a-b == -6 )){
 }
 
 """

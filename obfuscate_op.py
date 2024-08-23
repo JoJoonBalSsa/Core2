@@ -49,10 +49,8 @@ class obfuscate_Op:
 
         # 연산자 우선순위에 따라 처리
         for operator_pattern in self.ob_json.keys():
-            pattern = re.compile(rf'(\([^()]+\)|\b-?\w+\b|-?\d+)\s*({re.escape(operator_pattern)})\s*(\([^()]+\)|\b-?\w+\b|-?\d+)')
-
-
-
+            # 피연산자가 단항 연산자를 포함할 수 있도록 정규식 수정
+            pattern = re.compile(rf'(\([^()]+\)|\b-?\w+\b|-?\d+|[!~]\s*\([^()]+\)|[!~]\s*\b-?\w+\b|-?\d+)\s*({re.escape(operator_pattern)})\s*(\([^()]+\)|\b-?\w+\b|-?\d+|[!~]\s*\([^()]+\)|[!~]\s*\b-?\w+\b|-?\d+)')
 
             expression = ''.join(expression)
             match = pattern.search(expression)
@@ -62,7 +60,7 @@ class obfuscate_Op:
                 operand2 = match.group(3)
 
                 # 디버깅용 출력
-                #print(f"Identified operator: {operator} between '{operand1}' and '{operand2}'")
+                print(f"Identified operator: {operator} between '{operand1}' and '{operand2}'")
 
                 # 식별된 연산자를 적용하여 난독화된 표현으로 변경
                 obfuscated = self.ob_json[operator].format(a=operand1, b=operand2)
