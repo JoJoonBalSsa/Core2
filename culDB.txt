@@ -1,0 +1,90 @@
+1. 산술연산자
++   =>  a-(-b)                                  => a-(~b+1)  => a-(myFunction(~b,1)) => a-(((MyClass) obj).myFunction(~b,1)) => a + (~obj.myFunction(~b, 1) + 1)
+-   =>  a+(~b + 1)                              => a+(myFunction(~b,1)) => a + obj.myFunction(~b, 1)
+*   =>  반복문 (b번) result += a                 => 반복문 (b번) result = result + a    => 반복문 (b번) resultObfuscated += (~obj.myFunction(~a, 1) + 1)
+a/b   =>  반복문 (temp >= b) temp -= a            => 반복문 (!(temp>b)) temp -= a => 반복문 (!(temp>b)) result2 = result2 - a => 반복문 (!(temp>b)) result2 = result2+(((MyClass) obj).myFunction(~a,1))
+        result++                                => result += 1  => result = result + 1 => result = result(~((((MyClass) obj).myFunction(~1,1)))+1)
+    =>int resultObfuscated = 0;
+        int temp = a;
+        int bInverted = ~obj.myFunction(~b, 1) + 1;
+        while (temp >= bInverted) {
+            temp -= bInverted;
+            resultObfuscated++;
+        }
+
+%   =>  a - (a / b) * b || 반복문 temp -= a     => a - (int temp = a; int bInverted = ~obj.myFunction(~b, 1) + 1; while (temp >= bInverted) { temp -= bInverted; } temp * b)
+
+2. 단항연산자
++   =>  기호에 영향을 주기 않음으로 난독화 하기 어려움
+-   =>  ~a + 1
+++  =>  a += 1                  => a = a + 1 => a = {a} + (~obj.myFunction(~1, 1) + 1)
+--  =>  a -= 1
+!   =>  (a==false) || (a==true)
+
+3. 관계연산자
+==  =>  !(a != b)
+!=  =>  !(a == b)
+>   =>  <을 사용, a+(~b)>-1, ~b+1>-a
+<   =>  >을 사용, a+(~b)<-1, ~b+1<-a
+<=  =>  !(a > b)
+>=  =>  !(a < b)
+
+4. 비트연산자
+&   =>  ~(~a | ~b)
+|   =>  ~(~a & ~b)
+^   =>  (a | b) & ~(a & b)
+~   =>  -a - 1
+<<  =>  a * (int)Math.pow(2, b) # 2의 거듭제곱
+>>  =>  a / (int)Math.pow(2, b)
+>>> =>  (a & 0x7fffffff) >> b
+
+5. 논리연산자
+&&  => (a ? (b ? true : false) : false)
+||  => (a ? true : (b ? true : false))
+!   => (a ? false : true)
+
+6. 대입연산자
+a = b       =>  a = b ^ 0
++=      =>  result = result + b
+-=      =>  result = result - b
+*=      =>  result = result * b
+/=      =>  result = result / b
+%=      =>  result = result % b
+&=      =>  result = result & b
+|=      =>  result = result | b
+^=      =>  result = result ^ b
+<<=     =>  result = result << b
+>>=     =>  result = result >> b
+>>>=    =>  result = result >>> b
+
+7. 조건연산자
+?:  => if-else문 or 삼항 연산자 (a>b) ? a:b => (a > b ? 1 : 0) * a + (a > b ? 0 : 1) * b
+
+8. instanceof 연산자
+instanceof  =>  obj instanceof MyClass => MyClass.class.isInstance(obj)
+            =>  try {
+                    result = Class.forName("MyClass").isInstance(obj);
+                } catch (ClassNotFoundException e) {
+                    result = false;
+                } #리플렉션 사용
+            =>  try {
+                    Class<?> clazz = Class.forName("MyClass");
+                    result = clazz.isInstance(obj);
+                } catch (ClassNotFoundException e) {
+                    result = false;
+                } #리플렉션 사용
+
+9. 기타연산자
+()  =>  myFunction(a, b) => ((MyClass) obj).myFunction(a, b)
+[]  =>  array[index] => java.lang.reflect.Array.getInt(array, index)  
+.   =>  value = obj.field   =>  java.lang.reflect.Field field = obj.getClass().getDeclaredField("field");
+                                field.setAccessible(true);
+                                int value = (int) field.get(obj);
+::  =>  MyClass::myMethod   =>  () -> new MyClass().myMethod()
+
+
+class MyClass {
+    public int myFunction(int x, int y) {
+        return x + y
+    }
+}
