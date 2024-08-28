@@ -1,80 +1,74 @@
-#대상폴더경로불러오기
 import os
-import hashlib
 import re
-import sqlite3
+import random
 
-# Java 파일들이 있는 폴더 경로
-def get_java_files_path(project_root):
-    java_path = os.path.join(project_root, 'java')
-    if not os.path.exists(java_path):
-        raise FileNotFoundError(f"Java 폴더가 존재하지 않습니다: {java_path}")
-    return java_path
-
-#대상파일읽기
-def read_java_files(java_files_path):
+def find_java_files(folder_path):
     java_files = []
-    for root, dirs, files in os.walk(java_files_path):
+    for root, dirs, files in os.walk(folder_path):
         for file in files:
-            if file.endswith(".java"):
-                file_path = os.path.join(root, file)
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    java_files.append((file_path, f.read()))
+            if file.endswith('.java'):
+                java_files.append(os.path.join(root, file))
     return java_files
 
-#파일 내 함수 이름 및 기타 등등 읽기 및 db저장
-def extract_function_names(file_content):
-    # 간단한 함수 이름 추출 정규식 (단순화를 위해)
-    function_pattern = re.compile(r'\bpublic\b|\bprivate\b|\bprotected\b.*?\b(\w+)\s*\(.*?\)\s*\{')
-    return function_pattern.findall(file_content)
+def read_file_with_encoding(file_path):
+    encodings = ['utf-8', 'cp949', 'euc-kr']
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as file:
+                return file.read()
+        except UnicodeDecodeError:
+            continue
+    raise UnicodeDecodeError(f"Unable to read the file {file_path} with any of the attempted encodings")
 
-def save_to_db(java_files):
-    conn = sqlite3.connect('function_meta.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS functions 
-                 (file_path TEXT, function_name TEXT)''')
+def parse_java_file(file_path):
+    content = read_file_with_encoding(file_path)
+    # 간단한 메소드 파싱 (실제 구현에서는 더 복잡한 파싱이 필요할 수 있습니다)
+    methods = re.findall(r'(\w+\s+\w+\s*\([^)]*\)\s*\{[^}]*\})', content)
+    return methods
+
+def obfuscate_method(method):
+    # 메소드를 여러 블록으로 분할
+    blocks = method.split(';')
     
-    for file_path, content in java_files:
-        function_names = extract_function_names(content)
-        for name in function_names:
-            c.execute("INSERT INTO functions (file_path, function_name) VALUES (?, ?)", 
-                      (file_path, name))
+    # 각 블록에 레이블 할당
+    labeled_blocks = [f'case {i}: {block.strip()}; break;' for i, block in enumerate(blocks) if block.strip()]
     
-    conn.commit()
-    conn.close()
+    # 난독화된 메소드 구성
+    obfuscated = f"""
+    int state = 0;
+    while(true) {{
+        switch(state) {{
+            {' '.join(labeled_blocks)}
+            default: return;
+        }}
+    }}
+    """
+    return obfuscated
 
-#db읽기
-def load_from_db():
-    conn = sqlite3.connect('function_meta.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM functions")
-    functions = c.fetchall()
-    conn.close()
-    return functions
+def obfuscate_java_file(file_path):
+    content = read_file_with_encoding(file_path)
+    
+    methods = parse_java_file(file_path)
+    for method in methods:
+        obfuscated_method = obfuscate_method(method)
+        content = content.replace(method, obfuscated_method)
+    
+    obfuscated_file_path = file_path.replace('.java', '_obfuscated.java')
+    with open(obfuscated_file_path, 'w', encoding='utf-8') as file:
+        file.write(content)
+    
+    return obfuscated_file_path
 
-#함수흐름난독화
-#함수분할
-def obfuscate_function_name(function_name):
-    return hashlib.md5(function_name.encode()).hexdigest()[:8]
+def main():
+    folder_path = 'C:/Users/sangbin/OneDrive/바탕 화면/vscode4/java-christmas-6-scienceNH/src/main/java/christmas'
+    java_files = find_java_files(folder_path)
+    
+    for file in java_files:
+        try:
+            obfuscated_file = obfuscate_java_file(file)
+            print(f"난독화된 파일 생성: {obfuscated_file}")
+        except UnicodeDecodeError as e:
+            print(f"파일 {file}을 처리하는 중 오류 발생: {str(e)}")
 
-def obfuscate_java_file(content, function_map):
-    for original_name, obfuscated_name in function_map.items():
-        content = re.sub(r'\b' + original_name + r'\b', obfuscated_name, content)
-    return content
-
-#파일변경 및 저장
-def apply_obfuscation(java_files, functions):
-    function_map = {func[1]: obfuscate_function_name(func[1]) for func in functions}
-
-    for file_path, content in java_files:
-        obfuscated_content = obfuscate_java_file(content, function_map)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(obfuscated_content)
-
-project_root = 'C:/Users/sangbin/OneDrive/바탕 화면/vscode4/java-christmas-6-scienceNH/src/test/java/christmas'
-
-java_files_path = get_java_files_path(project_root)
-java_files = read_java_files(java_files_path)
-save_to_db(java_files)
-functions = load_from_db()
-apply_obfuscation(java_files, functions)
+if __name__ == "__main__":
+    main()
