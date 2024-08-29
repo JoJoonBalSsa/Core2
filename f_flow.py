@@ -10,6 +10,33 @@ def find_java_files(folder_path):
                 java_files.append(os.path.join(root, file))
     return java_files
 
+def insert_function_in_content(java_content, new_function_code, insertion_point='class'):
+    """
+    자바 코드 문자열에 새로운 함수를 삽입합니다.
+
+    :param java_content: 자바 파일의 전체 내용 (문자열)
+    :param new_function_code: 삽입할 함수의 코드
+    :param insertion_point: 삽입할 위치 (기본값: 'class' - 클래스 정의 후)
+    :return: 수정된 자바 코드 문자열
+    """
+    lines = java_content.splitlines()
+    modified_lines = []
+    function_inserted = False
+
+    for line in lines:
+        modified_lines.append(line)
+        # 삽입할 위치를 찾습니다. 기본적으로 클래스 선언 후에 삽입합니다.
+        if insertion_point == 'class' and 'class ' in line and not function_inserted:
+            modified_lines.append("\n" + new_function_code + "\n")
+            function_inserted = True
+
+    if not function_inserted:
+        # 원하는 위치를 찾지 못한 경우 파일의 마지막에 삽입
+        modified_lines.append("\n" + new_function_code + "\n")
+
+    # 수정된 내용을 하나의 문자열로 결합하여 반환합니다.
+    return "\n".join(modified_lines)
+
 def read_file_with_encoding(file_path):
     encodings = ['utf-8', 'cp949', 'euc-kr']
     for encoding in encodings:
