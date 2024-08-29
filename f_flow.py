@@ -60,7 +60,7 @@ def obfuscate_java_file(file_path):
     return obfuscated_file_path
 
 def main():
-    folder_path = 'C:/Users/sangbin/OneDrive/바탕 화면/vscode4/java-christmas-6-scienceNH/src/main/java/christmas'
+    folder_path = 'D:/vscode/vscode4/java-christmas-6-scienceNH/src/main/java/christmas'
     java_files = find_java_files(folder_path)
     
     for file in java_files:
