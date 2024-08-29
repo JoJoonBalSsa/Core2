@@ -71,10 +71,14 @@ def identify_java_structures(java_content):
     :param java_content: 자바 파일의 전체 내용 (문자열)
     :return: 식별된 for문, if문, 연산자가 포함된 라인의 리스트
     """
-    # 정규 표현식 패턴 정의
-    for_pattern = re.compile(r'\bfor\s*\(.*\)')
-    if_pattern = re.compile(r'\bif\s*\(.*\)')
+    
+    loop_pattern = re.compile(r'\b(for|while|foreach)\s*\(.*\)')
+
+    if_pattern = re.compile(r'\b(if|else\s+if)\s*\(.*\)')
     operators_pattern = re.compile(r'[+\-*/=><!]=?|&&|\|\|')
+    switch_case_pattern = re.compile(r'\b(switch|case)\b')
+    do_while_pattern = re.compile(r'\bdo\s*{[^}]*}\s*while\s*\(.*\);')
+
 
     # 결과를 저장할 리스트
     identified_lines = []
@@ -82,14 +86,20 @@ def identify_java_structures(java_content):
     # 각 라인별로 검사
     lines = java_content.splitlines()
     for idx, line in enumerate(lines):
-        if for_pattern.search(line):
+        if loop_pattern.search(line):
             identified_lines.append((idx + 1, "for", line.strip()))
         elif if_pattern.search(line):
             identified_lines.append((idx + 1, "if", line.strip()))
         elif operators_pattern.search(line):
             identified_lines.append((idx + 1, "operator", line.strip()))
+        elif switch_case_pattern.search(line):
+            identified_lines.append((idx + 1, "switch", line.strip()))
+        elif do_while_pattern.search(line):
+            identified_lines.append((idx + 1, "do_while", line.strip()))
+
 
     return identified_lines
+
 
 #3번 랜덤이름
 def generate_random_string(length=8):
