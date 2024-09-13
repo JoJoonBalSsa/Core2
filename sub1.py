@@ -4,18 +4,6 @@ import re
 import random
 import string
 
-'''
-1. body부분 식별(메서드 이름과 body부분 코드 반환)
-2. 조건문,반복문,연산,함수호출 식별
-3. 새로운 함수만들기
-4. 새로운 함수에 메서드의 body부분 복사
-5. 복사한 메서드에 새로운 함수 호출
-6. 만들어진 새로운 함수 java코드 상위에 붙여넣기
-
-----고도화때 필요한 사항----
-2번 함수 생성 및 관련사항
-'''
-
 def find_java_files(folder_path):
     java_files = []
     for root, dirs, files in os.walk(folder_path):
@@ -33,7 +21,7 @@ def read_file_with_encoding(file_path):
         except UnicodeDecodeError:
             continue
     raise UnicodeDecodeError(f"Unable to read the file {file_path} with any of the attempted encodings")
-#1번
+
 def find_body(java_file_path):
     with open(java_file_path, 'r', encoding='utf-8') as file:
         java_content = file.read()
@@ -61,41 +49,6 @@ def find_body(java_file_path):
         methods[method_name] = (return_type, parameters, method_body)
 
     return methods
-#2번
-def identify_java_structures(java_content):
-    """
-    자바 코드에서 for문, if문, 연산자를 식별합니다.
-    :param java_content: 자바 파일의 전체 내용 (문자열)
-    :return: 식별된 for문, if문, 연산자가 포함된 라인의 리스트
-    """
-    
-    # loop_pattern = re.compile(r'\b(for|while|foreach)\s*\(.*\)')
-
-    # if_pattern = re.compile(r'\b(if|else\s+if)\s*\(.*\)')
-    # operators_pattern = re.compile(r'[+\-*/=><!]=?|&&|\|\|')
-    switch_case_pattern = re.compile(r'\b(switch|case)\b')
-    # do_while_pattern = re.compile(r'\bdo\s*{[^}]*}\s*while\s*\(.*\);')
-
-
-    # 결과를 저장할 리스트
-    identified_lines = []
-
-    # 각 라인별로 검사
-    lines = java_content.splitlines()
-    for idx, line in enumerate(lines):
-        # if loop_pattern.search(line):
-        #     identified_lines.append((idx + 1, "for", line.strip()))
-        # elif if_pattern.search(line):
-        #     identified_lines.append((idx + 1, "if", line.strip()))
-        # elif operators_pattern.search(line):
-        #     identified_lines.append((idx + 1, "operator", line.strip()))
-        if switch_case_pattern.search(line):
-            identified_lines.append((idx + 1, "switch", line.strip()))
-        # elif do_while_pattern.search(line):
-        #     identified_lines.append((idx + 1, "do_while", line.strip()))
-
-
-    return identified_lines
 
 def extract_try_block_content(java_code):
     pattern = r'(public|private)\s+(\w+)\s+\w+\s*\([^)]*\)\s*\{.*?try\s*\{([\s\S]*?)\s*return\s+(.*?);'
@@ -105,6 +58,7 @@ def extract_try_block_content(java_code):
         content = match.group(3).strip()
         return_value = match.group(4).strip()
         return content, return_value, return_type
+    print(f"No match found in extract_try_block_content. Java code:\n{java_code}")
     return None, None, None
 
 def has_try_in_body(method_body):
@@ -115,7 +69,7 @@ def generate_random_string(length=8):
     first_char = random.choice(string.ascii_lowercase)
     remaining_chars = ''.join(random.choice(letters) for _ in range(length - 1))
     return first_char + remaining_chars
-#3번, 4번
+
 def generate_java_function(method_body, return_type, method_para):
     function_name = generate_random_string()
     java_function_code = f"""
@@ -124,7 +78,7 @@ def generate_java_function(method_body, return_type, method_para):
 }}
 """
     return java_function_code, function_name
-#5번
+
 def replace_method_body(java_content, method_name, function_name, return_type, method_para):
     method_pattern = re.compile(rf"(\b{return_type}\s+{method_name}\s*\([^)]*\)\s*{{)")
     
@@ -161,7 +115,7 @@ def replace_method_body(java_content, method_name, function_name, return_type, m
     )
     
     return modified_content
-#6번
+
 def add_new_method(java_content, method_name, new_func):
     method_pattern = re.compile(rf"\b\S+\s+{method_name}\s*\([^)]*\)\s*{{")
     
@@ -226,6 +180,7 @@ def main():
         methods = find_body(java_file)
         for method_name, (return_type, method_para, method_body) in methods.items():
             print(f"Processing file: {java_file}")
+            print(f"Modifying method: {method_name}")
             
             new_func, new_func_name = generate_java_function(method_body, return_type, method_para)
             

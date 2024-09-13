@@ -11,8 +11,9 @@ import string
 5. 복사한 메서드에 새로운 함수 호출
 6. 만들어진 새로운 함수 java코드 상위에 붙여넣기
 
-----수정이 필요한 사항----
+----고도화때 필요한 사항----
 2번 함수 생성 및 관련사항
+parameter가 여러개인 메서드 처리
 '''
 
 def find_java_files(folder_path):
@@ -40,13 +41,14 @@ def find_body(java_file_path):
         java_content = file.read()
 
     # 메서드 정의를 찾는 정규 표현식
-    method_pattern = re.compile(r'\b(public|protected|private)\s+(\w+)\s+(\w+)\s*\([^)]*\)\s*\{')
+    method_pattern = re.compile(r'\b(public|protected|private)\s+(\w+)\s+(\w+)\s*\(([^)]*)\)\s*\{')
     methods = {}
 
     for match in method_pattern.finditer(java_content):
         access_modifier = match.group(1)  # public, protected, private
         return_type = match.group(2)      # 반환 타입 (예: void, int 등)
         method_name = match.group(3)      # 메서드 이름
+        parameters = match.group(4)       # 인자 리스트 (예: String param1, int param2)
         start_index = match.end()
 
         open_braces = 1
@@ -60,7 +62,7 @@ def find_body(java_file_path):
 
         # 메서드 본문에서 마지막 닫는 중괄호를 제외하고 추출
         method_body = java_content[start_index:end_index-1].strip()
-        methods[method_name] = (method_body, return_type)
+        methods[method_name] = (return_type, parameters, method_body)
 
     return methods
 
@@ -68,17 +70,16 @@ def find_body(java_file_path):
 def identify_java_structures(java_content):
     """
     자바 코드에서 for문, if문, 연산자를 식별합니다.
-
     :param java_content: 자바 파일의 전체 내용 (문자열)
     :return: 식별된 for문, if문, 연산자가 포함된 라인의 리스트
     """
     
-    loop_pattern = re.compile(r'\b(for|while|foreach)\s*\(.*\)')
+    # loop_pattern = re.compile(r'\b(for|while|foreach)\s*\(.*\)')
 
-    if_pattern = re.compile(r'\b(if|else\s+if)\s*\(.*\)')
-    operators_pattern = re.compile(r'[+\-*/=><!]=?|&&|\|\|')
+    # if_pattern = re.compile(r'\b(if|else\s+if)\s*\(.*\)')
+    # operators_pattern = re.compile(r'[+\-*/=><!]=?|&&|\|\|')
     switch_case_pattern = re.compile(r'\b(switch|case)\b')
-    do_while_pattern = re.compile(r'\bdo\s*{[^}]*}\s*while\s*\(.*\);')
+    # do_while_pattern = re.compile(r'\bdo\s*{[^}]*}\s*while\s*\(.*\);')
 
 
     # 결과를 저장할 리스트
@@ -87,16 +88,16 @@ def identify_java_structures(java_content):
     # 각 라인별로 검사
     lines = java_content.splitlines()
     for idx, line in enumerate(lines):
-        if loop_pattern.search(line):
-            identified_lines.append((idx + 1, "for", line.strip()))
-        elif if_pattern.search(line):
-            identified_lines.append((idx + 1, "if", line.strip()))
-        elif operators_pattern.search(line):
-            identified_lines.append((idx + 1, "operator", line.strip()))
-        elif switch_case_pattern.search(line):
+        # if loop_pattern.search(line):
+        #     identified_lines.append((idx + 1, "for", line.strip()))
+        # elif if_pattern.search(line):
+        #     identified_lines.append((idx + 1, "if", line.strip()))
+        # elif operators_pattern.search(line):
+        #     identified_lines.append((idx + 1, "operator", line.strip()))
+        if switch_case_pattern.search(line):
             identified_lines.append((idx + 1, "switch", line.strip()))
-        elif do_while_pattern.search(line):
-            identified_lines.append((idx + 1, "do_while", line.strip()))
+        # elif do_while_pattern.search(line):
+        #     identified_lines.append((idx + 1, "do_while", line.strip()))
 
 
     return identified_lines
@@ -109,10 +110,10 @@ def generate_random_string(length=8):
     return first_char + remaining_chars
 
 #3번, 4번
-def generate_java_function(method_body, return_type):
+def generate_java_function(method_body, return_type, method_para):
     function_name = generate_random_string()
     java_function_code = f"""
-    public {return_type} {function_name}() {{
+    public {return_type} {function_name}({method_para}) {{
     {method_body}
 }}
 """
@@ -120,7 +121,7 @@ def generate_java_function(method_body, return_type):
 import re
 
 #5번
-def replace_method_body(java_content, method_name, function_name, return_type):
+def replace_method_body(java_content, method_name, function_name, return_type, method_para):
     # 메서드 시그니처를 찾는 정규 표현식 (메서드 이름과 괄호, 매개변수 포함)
     method_pattern = re.compile(rf"(\b{return_type}\s+{method_name}\s*\([^)]*\)\s*{{)")
     
@@ -141,16 +142,26 @@ def replace_method_body(java_content, method_name, function_name, return_type):
         elif java_content[end_index] == '}':
             open_braces -= 1
         end_index += 1
-    
+    if method_para != '':
+        para = method_para.split()[1]
     # 새로운 메서드 body를 작성합니다.
-    if return_type == 'void':
-        modified_body = (
-            f"\n        {function_name}();\n"
-        )
+        if return_type == 'void':
+            modified_body = (
+                f"\n        {function_name}({para});\n"
+            )
+        else:
+            modified_body = (
+                f"\n        return {function_name}({para});\n"
+            )
     else:
-        modified_body = (
-            f"\n        return {function_name}();\n"
-        )
+        if return_type == 'void':
+            modified_body = (
+                f"\n        {function_name}();\n"
+            )
+        else:
+            modified_body = (
+                f"\n        return {function_name}();\n"
+            )
     
     # 기존 메서드 body를 대체합니다.
     modified_content = (
@@ -199,15 +210,15 @@ def main():
         java_content = read_file_with_encoding(java_file)  # 파일 읽기
 
         methods = find_body(java_file)  # 1번
-        for method_name, (method_body, return_type) in methods.items():
+        for method_name, (return_type, method_para, method_body) in methods.items():
             print(f"Processing file: {java_file}")
             print(f"Modifying method: {method_name}")
             
             # 3번, 4번: 새 메서드 생성
-            new_func, new_func_name = generate_java_function(method_body, return_type)
+            new_func, new_func_name = generate_java_function(method_body, return_type, method_para)
             
             # 5번: 기존 메서드 본문을 대체
-            java_content = replace_method_body(java_content, method_name, new_func_name, return_type)
+            java_content = replace_method_body(java_content, method_name, new_func_name, return_type, method_para)
             
             # 6번: 새 메서드를 추가
             java_content = add_new_method(java_content, method_name, new_func)
