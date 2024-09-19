@@ -3,6 +3,8 @@ import os
 import re
 import random
 import string
+import secrets
+
 
 '''
 1. body부분 식별(메서드 이름과 body부분 코드 반환)
@@ -62,41 +64,7 @@ def find_body(java_file_path):
 
     return methods
 #2번
-def identify_java_structures(java_content):
-    """
-    자바 코드에서 for문, if문, 연산자를 식별합니다.
-    :param java_content: 자바 파일의 전체 내용 (문자열)
-    :return: 식별된 for문, if문, 연산자가 포함된 라인의 리스트
-    """
-    
-    # loop_pattern = re.compile(r'\b(for|while|foreach)\s*\(.*\)')
-
-    # if_pattern = re.compile(r'\b(if|else\s+if)\s*\(.*\)')
-    # operators_pattern = re.compile(r'[+\-*/=><!]=?|&&|\|\|')
-    switch_case_pattern = re.compile(r'\b(switch|case)\b')
-    # do_while_pattern = re.compile(r'\bdo\s*{[^}]*}\s*while\s*\(.*\);')
-
-
-    # 결과를 저장할 리스트
-    identified_lines = []
-
-    # 각 라인별로 검사
-    lines = java_content.splitlines()
-    for idx, line in enumerate(lines):
-        # if loop_pattern.search(line):
-        #     identified_lines.append((idx + 1, "for", line.strip()))
-        # elif if_pattern.search(line):
-        #     identified_lines.append((idx + 1, "if", line.strip()))
-        # elif operators_pattern.search(line):
-        #     identified_lines.append((idx + 1, "operator", line.strip()))
-        if switch_case_pattern.search(line):
-            identified_lines.append((idx + 1, "switch", line.strip()))
-        # elif do_while_pattern.search(line):
-        #     identified_lines.append((idx + 1, "do_while", line.strip()))
-
-
-    return identified_lines
-
+#try-catch
 def extract_try_block_content(java_code):
     pattern = r'(public|private)\s+(\w+)\s+\w+\s*\([^)]*\)\s*\{.*?try\s*\{([\s\S]*?)\s*return\s+(.*?);'
     match = re.search(pattern, java_code, re.DOTALL)
@@ -106,15 +74,44 @@ def extract_try_block_content(java_code):
         return_value = match.group(4).strip()
         return content, return_value, return_type
     return None, None, None
-
+#try검사
 def has_try_in_body(method_body):
     return 'try' in method_body
 
+def extract_while_block_content(java_code):
+    pattern = r'(public|private)'
+    match = re.search(pattern, java_code, re.DOTALL)
+
+#while검사
+def has_while_in_body(method_body):
+    return 'while' in method_body
+
+def extract_if_block_content(java_code):
+    pattern = r'(public|private)'
+    match = re.search(pattern, java_code, re.DOTALL)
+
+#if검사
+def has_if_in_body(method_body):
+    return 'if' in method_body
+
+def extract_for_block_content(java_code):
+    pattern = r'(public|private)'
+    match = re.search(pattern, java_code, re.DOTALL)
+
+#for검사
+def has_for_in_body(method_body):
+    return 'for' in method_body
+
 def generate_random_string(length=8):
-    letters = string.ascii_lowercase + string.digits
-    first_char = random.choice(string.ascii_lowercase)
-    remaining_chars = ''.join(random.choice(letters) for _ in range(length - 1))
-    return first_char + remaining_chars
+    if length < 1:
+        raise ValueError("Length must be at least 1")
+    letters = string.ascii_lowercase
+    letters_and_digits = string.ascii_lowercase + string.digits
+    first_char = secrets.choice(letters)
+    rest_chars = ''.join(secrets.choice(letters_and_digits) for _ in range(length - 1))
+    
+    return first_char + rest_chars
+
 #3번, 4번
 def generate_java_function(method_body, return_type, method_para):
     function_name = generate_random_string()
@@ -124,6 +121,7 @@ def generate_java_function(method_body, return_type, method_para):
 }}
 """
     return java_function_code, function_name
+
 #5번
 def replace_method_body(java_content, method_name, function_name, return_type, method_para):
     method_pattern = re.compile(rf"(\b{return_type}\s+{method_name}\s*\([^)]*\)\s*{{)")
@@ -203,6 +201,12 @@ def add_new_method(java_content, method_name, new_func):
             new_method_content = f"\n{modified_new_func}\n{new_try_func}\n"
         else:
             new_method_content = f"\n{new_func}\n"
+    elif has_while_in_body(new_func):
+        pass
+    elif has_for_in_body(new_func):
+        pass
+    elif has_if_in_body(new_func):
+        pass
     else:
         new_method_content = f"\n{new_func}\n"
     
