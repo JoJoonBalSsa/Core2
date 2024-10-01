@@ -1,10 +1,9 @@
-import json
+import javalang
 import os
 import re
 import random
 import string
 import secrets
-from typing import List, Dict, Tuple
 
 
 '''
@@ -18,39 +17,6 @@ from typing import List, Dict, Tuple
 ----고도화때 필요한 사항----
 2번 함수 생성 및 관련사항
 '''
-
-def load_json_data(json_file_path: str) -> List[Dict]:
-    with open(json_file_path, 'r', encoding='utf-8') as file:
-        return json.load(file)
-
-def process_json_data(json_data: List[Dict]):
-    for item in json_data:
-        for tainted_info in item['tainted']:
-            file_path = tainted_info['file_path']
-            if os.path.exists(file_path):
-                modify_java_file(file_path, [tainted_info])
-            else:
-                print(f"File not found: {file_path}")
-def modify_java_file(file_path: str, methods_to_modify: List[Dict]):
-    with open(file_path, 'r', encoding='utf-8') as file:
-        content = file.read()
-
-    for method_info in methods_to_modify:
-        method_name = method_info['method_name'].split('.')[-2]  # 파일명.메서드이름 형식에서 메서드 이름 추출
-        original_method = get_method_from_source(content, method_name)
-        if original_method:
-            modified_method, _ = generate_java_function(original_method, "", "")  # 반환 타입과 파라미터는 무시
-            content = content.replace(original_method, modified_method)
-
-    with open(file_path, 'w', encoding='utf-8') as file:
-        file.write(content)
-
-def get_method_from_source(source_code: str, method_name: str) -> str:
-    method_pattern = re.compile(rf'{method_name}\s*\([^)]*\)\s*\{{[^}}]*\}}', re.DOTALL)
-    match = method_pattern.search(source_code)
-    if match:
-        return match.group()
-    return ""        
 
 def find_java_files(folder_path):
     java_files = []
@@ -163,32 +129,53 @@ def generate_random_string(length=8):
     return first_char + rest_chars
 
 #3번, 4번
-
 def generate_java_function(method_body, return_type, method_para):
     function_name = generate_random_string()
-    new_functions = []
-    
-    if has_try_in_body(method_body):
-        method_body, new_functions = process_try_block(method_body, method_para, new_functions)
-    
+    # while 문 처리
     if has_while_in_body(method_body):
-        method_body, new_functions = process_while_block(method_body, new_functions)
-    
-    if has_for_in_body(method_body):
-        method_body, new_functions = process_for_block(method_body, new_functions)
-    
-    if has_if_in_body(method_body):
-        method_body, new_functions = process_if_block(method_body, new_functions)
-
-    main_function = f"""
-    public {return_type} {function_name}({method_para}) {{
-        {method_body}
+        condition, content = extract_while_block_content(method_body)
+        if condition and content:
+            new_while_func_name = generate_random_string()
+            while_func = f"""
+    private void {new_while_func_name}() {{
+        {content}
     }}
 """
-    
-    all_functions = main_function + '\n'.join(new_functions)
-    return all_functions, function_name
+            method_body = method_body.replace(f"while ({condition}) {{{content}}}", f"while ({condition}) {{ {new_while_func_name}(); }}")
+            function_name = f"{function_name}\n{while_func}"
 
+    # for 문 처리
+    if has_for_in_body(method_body):
+        condition, content = extract_for_block_content(method_body)
+        if condition and content:
+            new_for_func_name = generate_random_string()
+            for_func = f"""
+    private void {new_for_func_name}() {{
+        {content}
+    }}
+"""
+            method_body = method_body.replace(f"for ({condition}) {{{content}}}", f"for ({condition}) {{ {new_for_func_name}(); }}")
+            function_name = f"{function_name}\n{for_func}"
+
+ # if 문 처리
+    if has_if_in_body(method_body):
+        condition, content = extract_if_block_content(method_body)
+        if condition and content:
+            new_if_func_name = generate_random_string()
+            if_func = f"""
+    private void {new_if_func_name}() {{
+        {content}
+    }}
+"""
+            method_body = method_body.replace(f"if ({condition}) {{{content}}}", f"if ({condition}) {{ {new_if_func_name}(); }}")
+            function_name = f"{function_name}\n{if_func}"
+    else:        
+        java_function_code = f"""
+        public {return_type} {function_name}({method_para}) {{
+        {method_body}
+    }}
+    """
+    return java_function_code, function_name
 
 #5번
 def replace_method_body(java_content, method_name, function_name, return_type, method_para):
@@ -227,70 +214,6 @@ def replace_method_body(java_content, method_name, function_name, return_type, m
     )
     
     return modified_content
-
-
-def process_try_block(method_body, method_para, new_functions):
-    try_content, return_value, try_return_type = extract_try_block_content(method_body)
-    if try_content and return_value and try_return_type:
-        new_try_func_name = generate_random_string()
-        new_try_func = f"""
-    private {try_return_type} {new_try_func_name}({method_para}) {{
-        {try_content}
-        return {return_value};
-    }}
-"""
-        new_functions.append(new_try_func)
-        method_body = f"""
-        try {{
-            return {new_try_func_name}({method_para.split()[-1] if method_para else ''});
-        }} catch (IllegalArgumentException e) {{
-            return {return_value};
-        }}
-"""
-    return method_body, new_functions
-
-def process_while_block(method_body, method_para, new_functions):
-    while_content, return_value, while_return_type = extract_while_block_content(method_body)
-    if while_content and return_value and while_return_type:
-        new_while_func_name = generate_random_string()
-        new_while_func = f"""
-    private {while_return_type} {new_while_func_name}({method_para}) {{
-        {while_content}
-    }}
-"""
-        new_functions.append(new_while_func)
-        method_body = method_body.replace(f"while ({while_condition}) {{{while_content}}}", f"while ({while_condition}) {{ {new_while_func_name}(); }}")
-        while_condition, while_content = extract_while_block_content(method_body)
-    return method_body, new_functions
-
-def process_for_block(method_body, method_para, new_functions):
-    for_condition, for_content = extract_for_block_content(method_body)
-    while for_condition and for_content:
-        new_for_func_name = generate_random_string()
-        new_for_func = f"""
-    private void {new_for_func_name}() {{
-        {for_content}
-    }}
-"""
-        new_functions.append(new_for_func)
-        method_body = method_body.replace(f"for ({for_condition}) {{{for_content}}}", f"for ({for_condition}) {{ {new_for_func_name}(); }}")
-        for_condition, for_content = extract_for_block_content(method_body)
-    return method_body, new_functions
-
-def process_if_block(method_body, method_para, new_functions):
-    if_condition, if_content = extract_if_block_content(method_body)
-    while if_condition and if_content:
-        new_if_func_name = generate_random_string()
-        new_if_func = f"""
-    private void {new_if_func_name}() {{
-        {if_content}
-    }}
-"""
-        new_functions.append(new_if_func)
-        method_body = method_body.replace(f"if ({if_condition}) {{{if_content}}}", f"if ({if_condition}) {{ {new_if_func_name}(); }}")
-        if_condition, if_content = extract_if_block_content(method_body)
-    return method_body, new_functions
-
 #6번
 def add_new_method(java_content, method_name, new_func):
     method_pattern = re.compile(rf"\b\S+\s+{method_name}\s*\([^)]*\)\s*{{")

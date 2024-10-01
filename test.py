@@ -193,9 +193,9 @@ def create_randomized_method(signature: str, body: str) -> Tuple[str, str, str, 
             method_body = block_body
         
         method_params = ', '.join(param_list + [f"String {var}" for var in loop_vars] + [f"String {var}" for var in modified_vars])
-        extracted_methods.append(f"private static {return_type_str} {method_name}({method_params}) {'' if block_type == 'try' else ''}{{" + f"\n    {method_body}\n" + "}")
+        extracted_methods.append(f"private static {return_type_str} {method_name}({method_params}) {'throws Exception ' if block_type == 'try' else ''}{{" + f"\n    {method_body}\n" + "}")
     
-    return new_signature, new_body, new_method_call, extracted_methods
+    return new_signature, new_body, random_name, new_method_call, extracted_methods
 
 def format_modified_method(original_signature: str, new_method_call: str, new_method: str, extracted_methods: List[str]) -> str:
     modified_body = f"    // 새로운 메서드 호출\n    {new_method_call}"
@@ -204,42 +204,33 @@ def format_modified_method(original_signature: str, new_method_call: str, new_me
         result += f"{method}\n\n"
     return result
 
-def modify_and_save_methods(processed_data: List[Dict[str, str]]):
-    for item in processed_data:
-        file_path = item['file_path']
-        full_method_name = item['method_name']
-        
-        method_name = extract_method_name(full_method_name)
-        method_signature, method_body, start, end = extract_method_from_source(file_path, method_name)
-        
-        if not method_signature or start == -1 or end == -1:
-            print(f"소스 파일에서 메서드를 추출할 수 없습니다: {file_path}")
-            continue
-        
-        new_signature, new_body, new_method_call, extracted_methods = create_randomized_method(method_signature, method_body)
-        new_method = f"{new_signature} {{\n\n{new_body}\n}}"
-        
-        modified_method = format_modified_method(method_signature, new_method_call, new_method, extracted_methods)
-        
-        # 파일 내용 읽기
-        with open(file_path, 'r', encoding='utf-8') as file:
-            content = file.read()
-        
-        # 원본 메서드를 수정된 메서드로 교체
-        modified_content = content[:start] + modified_method + content[end:]
-        
-        # 수정된 내용을 파일에 저장
-        with open(file_path, 'w', encoding='utf-8') as file:
-            file.write(modified_content)
-        
-        print(f"메서드가 성공적으로 수정되었습니다: {file_path}")
-
 def main():
     json_file_path = 'analysis_result.json'
     processed_data = read_and_process_json(json_file_path)
 
     if processed_data:
-        modify_and_save_methods(processed_data)
+        for item in processed_data:
+            print(f"File Path: {item['file_path']}")
+            print(f"Full Method Name: {item['method_name']}")
+            
+            method_name = extract_method_name(item['method_name'])
+            print(f"Extracted Method Name: {method_name}")
+            
+            method_signature, method_body, start, end = extract_method_from_source(item['file_path'], method_name)
+            if not method_signature or start == -1 or end == -1:
+                print("소스 파일에서 메서드를 추출할 수 없습니다.")
+                continue
+            
+            print(f"Original Method:\n{method_signature} {{\n{method_body}\n}}")
+            
+            new_signature, new_body, random_name, new_method_call, extracted_methods = create_randomized_method(method_signature, method_body)
+            new_method = f"{new_signature} {{\n{new_body}\n}}"
+            
+            modified_method = format_modified_method(method_signature, new_method_call, new_method, extracted_methods)
+            print("\n수정된 메서드 및 새로 생성된 메서드들:")
+            print(modified_method)
+            
+            print("-" * 50)  # 구분선 출력
     else:
         print("처리된 데이터가 없습니다.")
 
