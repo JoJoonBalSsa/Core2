@@ -1,12 +1,16 @@
 import re
 import secrets
 import string
+<<<<<<< HEAD
 '''
 필요한 부분
 1. for, if, while, switch 문 식별(body부분에서 변수만 식별)
 2. try-catch문 식별(body부분 복사)
 3. __add_new_method 수정 필요
 '''
+=======
+
+>>>>>>> 9b26d62334746cad72ef0535a2b7fff2b53dae3b
 
 class MethodSplit:
     def __init__(self, method):
@@ -167,4 +171,8 @@ class MethodSplit:
 
         new_method_content = f"\n{new_func}\n"
 
+<<<<<<< HEAD
         return java_method + "\n" + new_method_content
+=======
+        return java_method + "\n" + new_method_content
+>>>>>>> 9b26d62334746cad72ef0535a2b7fff2b53dae3b
