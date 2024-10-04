@@ -14,13 +14,11 @@ def extract_variable_declarations(code):
 
 def extract_statements_before_while(code):
     # while 블록 이전의 모든 구문 추출 (변수 선언이 아닌 일반 구문도 포함)
-    statements_pattern = r'((?:.|\n)*?)\s*(while\s*\([^)]*\)\s*\{)'
+    statements_pattern = r'((?:.|\n)*?)(\s*while\s*\(.*?\)\s*\{)'
     match = re.search(statements_pattern, code, re.DOTALL)
     if match:
-        statements_before_while = match.group(1).strip()
-        while_start = match.group(2).strip()
-        return statements_before_while, while_start  # while 이전의 모든 구문과 while 시작 부분을 추출
-    return code.strip(), ""  # while이 없는 경우 전체 코드 반환
+        return match.group(1).strip()  # while 이전의 모든 구문을 추출
+    return ""
 
 def extract_while_block_content(java_code):
     # 메서드의 전체 구조를 캡처하는 정규식
@@ -37,67 +35,64 @@ def extract_while_block_content(java_code):
 
         # 변수 선언 추출
         declared_variables_before_while = extract_variable_declarations(before_while_code)
-        
+        print('--------------')
+        print(before_while_code)
+        print('--------------')
         # 모든 구문 추출
-        statements_before_while, while_start = extract_statements_before_while(before_while_code)
+        statements_before_while = extract_statements_before_while(before_while_code)
         
-        # `while` 구문을 완성해서 반환
-        if not while_start:  # `while`이 추출되지 않았을 경우 수동으로 추가
-            while_start = f"while ({while_condition}) {{"
-
-        return while_content, return_type, method_name, declared_variables_before_while, while_condition, after_while_code, statements_before_while, while_start
+        return while_content, return_type, method_name, declared_variables_before_while, while_condition, after_while_code, statements_before_while
     
-    # None 값 8개 반환
-    return None, None, None, None, None, None, None, None
+    # None 값 7개 반환
+    return None, None, None, None, None, None, None
 
 def if_while_catch(new_func):
-    # Extract content using the modified function
-    while_content, return_type, method_name, declared_variables_before_while, while_condition, after_while_code, statements_before_while, while_start = extract_while_block_content(new_func)
+    while_content, return_type, method_name, declared_variables_before_while, while_condition, after_while_code, statements_before_while = extract_while_block_content(new_func)
     
     if while_content and return_type and method_name:
-        # Extract each line in the while content
+        # while_content 안의 각 라인을 추출
         lines = [line.strip() for line in while_content.splitlines() if line.strip()]
         
         method_calls = []
         new_methods = []
         method_count = 1
 
-        # Extract method parameters
+        # 메서드의 파라미터 추출
         parameters = new_func.split('(')[1].split(')')[0]
         param_list = [param.strip() for param in parameters.split(',') if param.strip()]
         parameter_names = ', '.join([param.split()[-1] for param in param_list])
 
         for line in lines:
-            # Determine return type and parameters based on modified variables
+            # 변경되는 변수에 따라 반환 타입과 파라미터 결정
             variable_to_modify = re.findall(r'(\w+)\s*(?:[+\-*/]?=)', line)
             if variable_to_modify:
                 variable_to_modify = variable_to_modify[0]
                 variable_type = None
                 
-                # Find type from declared variables
+                # 선언된 변수에서 타입 찾기
                 for var_type, var_name, init_value in declared_variables_before_while:
                     if var_name == variable_to_modify:
                         variable_type = var_type
                         break
                 
-                # Find type from method parameters
+                # 메서드 파라미터에서 타입 찾기
                 if not variable_type:
                     for param in param_list:
                         if variable_to_modify in param:
                             variable_type = param.split()[0]
                             break
 
-                # Create a new function name
+                # 새로운 함수 이름 생성
                 new_func_name = f"generatedFunction{method_count}"
                 method_count += 1
                 
-                # Generate the new method with modified parameters and return type
+                # 새 메서드 생성: 파라미터의 타입과 이름 변경
                 remaining_parameters = ', '.join([param for param in param_list if param.split()[-1] != variable_to_modify])
                 if remaining_parameters:
                     new_method = f"""
     public {variable_type} {new_func_name}({variable_type} {variable_to_modify}, {remaining_parameters}) {{
         {line}
-        return {variable_to_modify};  // Return modified variable
+        return {variable_to_modify};  // 변경된 변수를 반환
     }}
 """
                     method_calls.append(f"{variable_to_modify} = {new_func_name}({variable_to_modify}, {', '.join([param.split()[-1] for param in param_list if param.split()[-1] != variable_to_modify])});")
@@ -105,12 +100,12 @@ def if_while_catch(new_func):
                     new_method = f"""
     public {variable_type} {new_func_name}({variable_type} {variable_to_modify}) {{
         {line}
-        return {variable_to_modify};  // Return modified variable
+        return {variable_to_modify};  // 변경된 변수를 반환
     }}
 """
                     method_calls.append(f"{variable_to_modify} = {new_func_name}({variable_to_modify});")
             else:
-                # Generate void method if no modified variable
+                # 변경되는 변수가 없을 경우 void 메서드 생성
                 new_func_name = f"generatedFunction{method_count}"
                 method_count += 1
                 new_method = f"""
@@ -122,22 +117,19 @@ def if_while_catch(new_func):
             
             new_methods.append(new_method)
 
-        # Combine method calls into a single string
+        # 메서드 호출 구문 합치기
         method_calls_str = "\n            ".join(method_calls)
 
-        # Extract and restore original variable declarations
+        # 원래 변수 선언 부분 추출 및 복원
         original_variable_declarations = extract_variable_declarations(new_func)
-
-        # Only include variable declarations not already in statements_before_while
-        variable_declarations = '; '.join([f'{var_type} {var_name} {init_value}' for var_type, var_name, init_value in original_variable_declarations if f'{var_name}' not in statements_before_while])
+        variable_declarations = '; '.join([f'{var_type} {var_name} {init_value}' for var_type, var_name, init_value in original_variable_declarations])
         variable_declarations = f"{variable_declarations};" if variable_declarations else ""
 
-        # Restore the modified function
         modified_new_func = f"""
     public {new_func.split()[1]} {new_func.split()[2].split('(')[0]}({parameters}) {{
         {statements_before_while}
         {variable_declarations}
-        {while_start} {{
+        while ({while_condition}) {{
             {method_calls_str}
         }}
         {after_while_code}
