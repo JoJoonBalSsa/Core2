@@ -135,13 +135,22 @@ def has_if_in_body(method_body):
     return 'if' in method_body
 
 def extract_for_block_content(java_code):
-    pattern = r'for\s*\((.*?)\)\s*\{([\s\S]*?)\}'
+    # `for` 루프와 그 내부 내용을 추출하는 정규식
+    pattern = r'for\s*\((.*?)\)\s*\{(.*?)\}'
     match = re.search(pattern, java_code, re.DOTALL)
     if match:
-        condition = match.group(1).strip()
-        content = match.group(2).strip()
-        return condition, content
+        loop_condition = match.group(1).strip()
+        loop_content = match.group(2).strip()
+        return loop_condition, loop_content
     return None, None
+
+def extract_variables_in_for_loop(loop_condition, loop_content):
+    # `for` 루프의 변수 및 내용에 등장하는 변수 추출
+    variable_pattern = r'(\w+)\s*[+\-*/]?='
+    variables_in_condition = re.findall(variable_pattern, loop_condition)
+    variables_in_content = re.findall(variable_pattern, loop_content)
+    variables = set(variables_in_condition + variables_in_content)
+    return list(variables)
 
 #for검사
 def has_for_in_body(method_body):
@@ -316,7 +325,7 @@ def if_while_catch(new_func):
     public {new_func.split()[1]} {new_func.split()[2].split('(')[0]}({parameters}) {{
         {statements_before_while}
         {variable_declarations}
-        {while_start} {{
+        {while_start}
             {method_calls_str}
         }}
         {after_while_code}
@@ -327,6 +336,63 @@ def if_while_catch(new_func):
         new_method_content = f"\n{new_func}\n"
     return new_method_content
 
+def if_for_catch(java_code):
+    # `for` 루프의 내용 추출
+    loop_condition, loop_content = extract_for_block_content(java_code)
+    
+    if loop_condition and loop_content:
+        # `for` 루프 내부에서 사용되는 변수 추출
+        variables = extract_variables_in_for_loop(loop_condition, loop_content)
+        variable_parameters = ', '.join([f'int {var}' for var in variables])  # 모든 변수를 `int`로 가정
+        
+        # `for` 루프 내부의 각 문장을 추출
+        lines = [line.strip() for line in loop_content.splitlines() if line.strip()]
+        
+        method_calls = []
+        new_methods = []
+        method_count = 1
+        
+        for line in lines:
+            # 새로운 메서드 이름 생성
+            new_method_name = generate_random_string()
+
+            # 수정되는 변수 확인
+            modified_variable_match = re.match(r'(\w+)\s*[+\-*/]?=', line)
+            if modified_variable_match:
+                modified_variable = modified_variable_match.group(1).strip()
+                # 새 메서드 생성 (변경된 변수 반환)
+                new_method = f"""
+    public int {new_method_name}({variable_parameters}) {{
+        {line}
+        return {modified_variable};
+    }}
+"""
+                new_methods.append(new_method)
+                method_calls.append(f"{modified_variable} = {new_method_name}({', '.join(variables)});")
+            else:
+                # 새 메서드 생성 (변경된 변수가 없는 경우)
+                new_method = f"""
+    public void {new_method_name}({variable_parameters}) {{
+        {line}
+    }}
+"""
+                new_methods.append(new_method)
+                method_calls.append(f"{new_method_name}({', '.join(variables)});")
+        
+        # 기존 `for` 루프를 새 메서드 호출로 변경
+        modified_for_loop = f"for ({loop_condition}) {{\n            " + "\n            ".join(method_calls) + "\n        }"
+        
+        # 새로운 메서드들 추가
+        new_method_content = "\n".join(new_methods)
+        
+        # 기존 코드의 `for` 루프를 변경된 내용으로 대체
+        modified_code = re.sub(r'for\s*\(.*?\)\s*\{.*?\}', modified_for_loop, java_code, flags=re.DOTALL)
+        modified_code += f"\n{new_method_content}"
+        
+        return modified_code
+    
+    # `for` 루프가 없을 경우 원본 코드 반환
+    return java_code
 
 #6번
 def add_new_method(java_content, method_name, new_func):
@@ -351,10 +417,9 @@ def add_new_method(java_content, method_name, new_func):
         new_method_content = if_try_catch(new_func)
     elif has_while_in_body(new_func):
         new_method_content = if_while_catch(new_func)
+    elif has_for_in_body(new_func):
+        new_method_content = if_for_catch(new_func)
         print(new_method_content)
-
-    # elif has_for_in_body(new_func):
-    #     pass
     # elif has_if_in_body(new_func):
     #     pass
     else:

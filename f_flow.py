@@ -316,7 +316,7 @@ def if_while_catch(new_func):
     public {new_func.split()[1]} {new_func.split()[2].split('(')[0]}({parameters}) {{
         {statements_before_while}
         {variable_declarations}
-        {while_start} {{
+        {while_start}
             {method_calls_str}
         }}
         {after_while_code}
@@ -351,8 +351,6 @@ def add_new_method(java_content, method_name, new_func):
         new_method_content = if_try_catch(new_func)
     elif has_while_in_body(new_func):
         new_method_content = if_while_catch(new_func)
-        print(new_method_content)
-
     # elif has_for_in_body(new_func):
     #     pass
     # elif has_if_in_body(new_func):
@@ -387,8 +385,8 @@ def main():
 
             java_content = add_new_method(java_content, method_name, new_func)
         
-        # save_file_with_encoding(java_file, java_content)
-        # print(f"File saved: {java_file}")
+        save_file_with_encoding(java_file, java_content)
+        print(f"File saved: {java_file}")
 
 if __name__ == "__main__":
     main()
