@@ -564,7 +564,9 @@ def extract_variables_in_for_loop(loop_condition, loop_content):
     return list(variables)
 
 def has_for_in_body(method_body):
-    return 'for' in method_body
+    # 정규표현식으로 for 구문 찾기
+    pattern = r'\bfor\s*\(.*?\)\s*\{'
+    return bool(re.search(pattern, method_body))
 
 def generate_random_string(length=8):
     if length < 1:

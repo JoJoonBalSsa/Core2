@@ -1,217 +1,163 @@
 import re
 
-def extract_modified_variable(while_content):
-    # 변경되는 변수 찾는 정규식 (예: x = 10, x += 10 등)
-    modified_variable_pattern = r'(\w+)\s*(?:[+\-*/]?=)\s*[^;]+;'
-    matches = re.findall(modified_variable_pattern, while_content)
-    return matches
+def has_if_in_body(method_body):
+    # if 문 내부에 또 다른 if가 있는지 확인하는 함수
+    pattern = r'\bif\s*\(.*?\)\s*\{'
+    return bool(re.search(pattern, method_body))
 
-def extract_variable_declarations(code):
-    # 변수 선언 및 초기화 추출 (예: int x = 0;, String name = "test";)
-    declaration_pattern = r'(\w+)\s+(\w+)\s*(=.*?);'
-    declarations = re.findall(declaration_pattern, code)
-    return declarations
-
-def extract_statements_before_while(code):
-    # while 블록 이전의 모든 구문 추출 (변수 선언이 아닌 일반 구문도 포함)
-    statements_pattern = r'((?:.|\n)*?)(\s*while\s*\(.*?\)\s*\{)'
-    match = re.search(statements_pattern, code, re.DOTALL)
-    if match:
-        return match.group(1).strip()  # while 이전의 모든 구문을 추출
-    return ""
-
-def extract_while_block_content(java_code):
-    # 메서드의 전체 구조를 캡처하는 정규식
-    pattern = r'(public|private|protected)\s+(\w+)\s+(\w+)\s*\(.*?\)\s*\{(.*?)\s*while\s*\((.*?)\)\s*\{(.*?)\}(.*)\}'
+def extract_if_statement(java_code):
+    # `if` 문과 그 내부 내용을 추출하는 정규식
+    pattern = r'if\s*\((.*?)\)\s*\{(.*?)\}'
     match = re.search(pattern, java_code, re.DOTALL)
-    
     if match:
-        return_type = match.group(2)
-        method_name = match.group(3)
-        before_while_code = match.group(4).strip()
-        while_condition = match.group(5).strip()
-        while_content = match.group(6).strip()
-        after_while_code = match.group(7).strip()
+        condition = match.group(1).strip()
+        content = match.group(2).strip()
+        return condition, content
+    return None, None
 
-        # 변수 선언 추출
-        declared_variables_before_while = extract_variable_declarations(before_while_code)
-        print('--------------')
-        print(before_while_code)
-        print('--------------')
-        # 모든 구문 추출
-        statements_before_while = extract_statements_before_while(before_while_code)
-        
-        return while_content, return_type, method_name, declared_variables_before_while, while_condition, after_while_code, statements_before_while
-    
-    # None 값 7개 반환
-    return None, None, None, None, None, None, None
+def extract_method_parameters(java_code):
+    # 메서드 시그니처에서 파라미터와 타입을 추출
+    parameters_match = re.search(r'\((.*?)\)', java_code)
+    parameters = []
+    parameter_types = {}
+    if parameters_match:
+        param_list = [param.strip() for param in parameters_match.group(1).split(',')]
+        for param in param_list:
+            if param:  # 파라미터가 존재할 때만 추가
+                param_parts = param.rsplit(' ', 1)
+                if len(param_parts) == 2:
+                    param_type, param_name = param_parts
+                    parameters.append(param_name)
+                    parameter_types[param_name] = param_type
+    return parameters, parameter_types
 
-def if_while_catch(new_func):
-    while_content, return_type, method_name, declared_variables_before_while, while_condition, after_while_code, statements_before_while = extract_while_block_content(new_func)
+def extract_variables_in_if_statement(content, parameters):
+    # `if` 문 내부에서 사용되는 변수 추출
+    variable_pattern = r'\b(' + '|'.join(parameters) + r')\b'
+    variables_in_content = re.findall(variable_pattern, content)
     
-    if while_content and return_type and method_name:
-        # while_content 안의 각 라인을 추출
-        lines = [line.strip() for line in while_content.splitlines() if line.strip()]
-        
+    return list(set(variables_in_content))
+
+def extract_all_variables(line):
+    # 코드에서 사용된 변수들을 추출하는 함수
+    variable_pattern = r'\b\w+\b'
+    variables = re.findall(variable_pattern, line)
+    return list(set(variables))
+
+def if_if_catch(java_code):
+    # 메서드 파라미터 추출
+    parameters, parameter_types = extract_method_parameters(java_code)
+
+    # `if` 문 추출
+    condition, content = extract_if_statement(java_code)
+    
+    if condition and content:
+        # `if` 문 내부에서 사용되는 외부 변수 추출
+        variables = extract_variables_in_if_statement(content, parameters)
+        variable_parameters = ', '.join([f'{parameter_types[var]} {var}' for var in parameters])  # 변수 타입을 기반으로 파라미터 생성
+
         method_calls = []
         new_methods = []
         method_count = 1
+        new_variables = []  # 새로 생성된 변수 추적
+        external_variables = ["x"]  # 추적된 외부 변수들 (예: x)
 
-        # 메서드의 파라미터 추출
-        parameters = new_func.split('(')[1].split(')')[0]
-        param_list = [param.strip() for param in parameters.split(',') if param.strip()]
-        parameter_names = ', '.join([param.split()[-1] for param in param_list])
-
-        for line in lines:
-            # 변경되는 변수에 따라 반환 타입과 파라미터 결정
-            variable_to_modify = re.findall(r'(\w+)\s*(?:[+\-*/]?=)', line)
-            if variable_to_modify:
-                variable_to_modify = variable_to_modify[0]
-                variable_type = None
-                
-                # 선언된 변수에서 타입 찾기
-                for var_type, var_name, init_value in declared_variables_before_while:
-                    if var_name == variable_to_modify:
-                        variable_type = var_type
-                        break
-                
-                # 메서드 파라미터에서 타입 찾기
-                if not variable_type:
-                    for param in param_list:
-                        if variable_to_modify in param:
-                            variable_type = param.split()[0]
-                            break
-
-                # 새로운 함수 이름 생성
-                new_func_name = f"generatedFunction{method_count}"
-                method_count += 1
-                
-                # 새 메서드 생성: 파라미터의 타입과 이름 변경
-                remaining_parameters = ', '.join([param for param in param_list if param.split()[-1] != variable_to_modify])
-                if remaining_parameters:
-                    new_method = f"""
-    public {variable_type} {new_func_name}({variable_type} {variable_to_modify}, {remaining_parameters}) {{
-        {line}
-        return {variable_to_modify};  // 변경된 변수를 반환
-    }}
-"""
-                    method_calls.append(f"{variable_to_modify} = {new_func_name}({variable_to_modify}, {', '.join([param.split()[-1] for param in param_list if param.split()[-1] != variable_to_modify])});")
-                else:
-                    new_method = f"""
-    public {variable_type} {new_func_name}({variable_type} {variable_to_modify}) {{
-        {line}
-        return {variable_to_modify};  // 변경된 변수를 반환
-    }}
-"""
-                    method_calls.append(f"{variable_to_modify} = {new_func_name}({variable_to_modify});")
-            else:
-                # 변경되는 변수가 없을 경우 void 메서드 생성
-                new_func_name = f"generatedFunction{method_count}"
-                method_count += 1
-                new_method = f"""
-    public void {new_func_name}({parameters}) {{
-        {line}
-    }}
-"""
-                method_calls.append(f"{new_func_name}({parameter_names});")
+        for line in content.splitlines():
+            line = line.strip()
+            if not line:
+                continue
             
-            new_methods.append(new_method)
-
-        # 메서드 호출 구문 합치기
-        method_calls_str = "\n            ".join(method_calls)
-
-        # 원래 변수 선언 부분 추출 및 복원
-        original_variable_declarations = extract_variable_declarations(new_func)
-        variable_declarations = '; '.join([f'{var_type} {var_name} {init_value}' for var_type, var_name, init_value in original_variable_declarations])
-        variable_declarations = f"{variable_declarations};" if variable_declarations else ""
-
-        modified_new_func = f"""
-    public {new_func.split()[1]} {new_func.split()[2].split('(')[0]}({parameters}) {{
-        {statements_before_while}
-        {variable_declarations}
-        while ({while_condition}) {{
-            {method_calls_str}
-        }}
-        {after_while_code}
+            # 새로운 변수 선언 여부 확인 (예: int square =)
+            declaration_match = re.match(r'(int|String|double|float|char|boolean)\s+(\w+)\s*=\s*(.*);', line)
+            if declaration_match:
+                var_type, var_name, expression = declaration_match.groups()
+                method_name = f"generatedIfMethod{method_count}"
+                method_count += 1
+                
+                # 새 메서드 생성
+                new_method = f"""
+    public {var_type} {method_name}({variable_parameters}, int x) {{
+        {var_type} {var_name} = {expression};
+        return {var_name};
     }}
 """
-        new_method_content = f"\n{modified_new_func}\n" + "\n".join(new_methods) + "\n"
-    else:
-        new_method_content = f"\n{new_func}\n"
+                new_methods.append(new_method)
+                method_calls.append(f"{var_type} {var_name} = {method_name}({', '.join(parameters)}, x);")
+                
+                # 추적된 변수에 추가
+                new_variables.append((var_type, var_name))
+            else:
+                # 중첩된 if/반복문 여부 확인
+                if has_if_in_body(line):
+                    method_name = f"generatedIfMethod{method_count}"
+                    method_count += 1
+
+                    # 중첩된 if 문이나 반복문 안에서 사용된 변수를 모두 파악
+                    variables_in_line = extract_all_variables(line)
+
+                    # 중복 파라미터를 제거하고 필요한 경우에만 추가
+                    unique_variables = [var for var in variables_in_line if var not in parameters and var != 'x']
+                    parameter_str = ', '.join([f'int {var}' for var in unique_variables] + ['int x'] if 'x' not in parameters else unique_variables)
+
+                    # 새로운 메서드를 동적으로 생성, 변수 포함
+                    new_method = f"""
+    public void {method_name}({parameter_str}, {variable_parameters}) {{
+        {line.strip()}
+    }}
+"""
+                    new_methods.append(new_method)
+                    method_calls.append(f"{method_name}({', '.join(unique_variables + parameters)});")
+                else:
+                    # 일반적인 메서드 생성
+                    method_name = f"generatedIfMethod{method_count}"
+                    method_count += 1
+
+                    # 새로 선언된 변수와 외부 변수를 파라미터에 추가
+                    additional_parameters = ', '.join([f'{var_type} {var_name}' for var_type, var_name in new_variables])
+                    all_parameters = f"{variable_parameters}, {additional_parameters}".strip(', ')
+                    all_variables = ', '.join([var_name for _, var_name in new_variables] + parameters)
+
+                    # 새로운 메서드 생성
+                    new_method = f"""
+    public void {method_name}({all_parameters}) {{
+        {line}
+    }}
+"""
+                    new_methods.append(new_method)
+                    method_calls.append(f"{method_name}({all_variables});")
+        
+        # 기존 `if` 문을 새로운 메서드 호출로 변경
+        modified_if_block = f"if ({condition}) {{\n            " + "\n            ".join(method_calls) + "\n        }"
+        
+        # 기존 코드의 `if` 문을 변경된 내용으로 대체
+        modified_code = re.sub(r'if\s*\(.*?\)\s*\{.*?\}', modified_if_block, java_code, flags=re.DOTALL)
+        modified_code += "\n" + "\n".join(new_methods)
+        
+        return modified_code
+
+    # `if` 문이 없을 경우 원본 코드 반환
+    return java_code
+
+# 테스트 코드
+def test_if_if_catch():
+    java_code = '''
+    public void checkNumber(int number) {
+        System.out.println("First");
+        System.out.println("second");
+        int x = 3;
+        if (number > 0) {
+            System.out.println("Positive");
+            int square = number * number;
+            System.out.println("Square: " + square);
+            square = square + x;
+        }
+        System.out.println("First");
+        System.out.println("second");
+    }
+    '''
     
-    return new_method_content
+    result = if_if_catch(java_code)
+    print("Modified Code:\n", result)
 
-
-def test_if_while_catch():
-    # 테스트 케이스 1: while 안에서 변수가 변경되는 경우
-    java_code_1 = '''
-    public void exampleMethod(int x, String name) {
-        int y = 0;
-
-        while (catchDateError(date)) {
-            x += 10;
-            System.out.println(name);
-            y = 5;
-        }
-
-        System.out.println("End of method");
-    }
-    '''
-
-    # 테스트 케이스 2: while 안에서 변수가 변경되지 않는 경우
-    java_code_2 = '''
-    public void anotherMethod(int i) {
-        while (i < 10) {
-            System.out.println(i);
-        }
-    }
-    '''
-
-    # 테스트 케이스 3: while 안에 변경되는 변수가 있고 파라미터로 전달해야 하는 경우
-    java_code_3 = '''
-    public void processData(int count) {
-        while (count > 0) {
-            count -= 1;
-            System.out.println("Processing...");
-        }
-        System.out.println("hello");
-    }
-    '''
-
-    java_code_4 = '''
-    public void inputMenu() {
-        EventView.orgerGuideMessage();
-
-        String menu = Console.readLine();
-        while (catchMenuError(menu)) {
-            EventModel.eraseOrderedMenu();
-            EventView.tryAgainMessage();
-            menu = Console.readLine();
-        }
-
-        EventView.printOrderedMenu();
-    }
-'''
-    # 테스트 실행 및 결과 출력
-    print("Test Case 1:")
-    result_1 = if_while_catch(java_code_1)
-    print(result_1)
-    print("\n")
-
-    print("Test Case 2:")
-    result_2 = if_while_catch(java_code_2)
-    print(result_2)
-    print("\n")
-
-    print("Test Case 3:")
-    result_3 = if_while_catch(java_code_3)
-    print(result_3)
-    print("\n")
-
-    print("Test Case 4:")
-    result_4 = if_while_catch(java_code_4)
-    print(result_4)
-    print("\n")
-
-# 테스트 실행
-test_if_while_catch()
+# 실행
+test_if_if_catch()
