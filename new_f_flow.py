@@ -440,8 +440,8 @@ class MethodSplit:
         for method in method_data:
             sum = self.__extract_conditionals_loops(method['if_content'])
             if sum:
-                modified_code = self.__sub(java_code)
-                method_name = self.__generate_random_string()
+                modified_code, new_function_name = self.__sub(java_code)
+                method_name = new_function_name
                 extracted_method, code_without_handle = self.__extract_method_by_name(modified_code,method_name)
                 result_after_if_catch = self.__if_if_catch(code_without_handle)
                 # 처리된 코드 뒤에 handleCondition1 메서드를 다시 붙임
@@ -562,7 +562,7 @@ class MethodSplit:
         # 첫 번째 if 블록을 찾아서 처리
         match = if_pattern.search(java_code)
         if match:
-            function_definitions, modified_if_block = self.__replace_first_if_block(match, available_vars)
+            function_definitions, modified_if_block, new_function_name = self.__replace_first_if_block(match, available_vars)
             
             # 원래 코드에서 첫 번째 if 블록을 수정된 if 블록으로 대체
             modified_code = java_code[:match.start()] + modified_if_block + java_code[match.end():]
@@ -571,7 +571,7 @@ class MethodSplit:
             modified_code += '\n' + function_definitions
             
             # 최종 결과 출력
-            return modified_code
+            return modified_code, new_function_name
         else:
             return java_code
     
@@ -585,7 +585,7 @@ class MethodSplit:
         code_block = match.group(2).strip()  # 첫 번째 if 블록 내부 코드
         
         # 내부 조건문 또는 반복문을 함수로 분리
-        new_functions, modified_code_block = self.__extract_internal_conditions(code_block, available_vars)
+        new_functions, modified_code_block, new_function_name = self.__extract_internal_conditions(code_block, available_vars)
         
         # 추출된 함수들 모음 (if 블록 외부에 정의)
         function_definitions = '\n'.join(new_functions)
@@ -593,15 +593,16 @@ class MethodSplit:
         # 수정된 if 블록 반환 (원래 위치에서 함수 호출로 대체)
         modified_if_block = f'if ({condition}) {{\n    {modified_code_block}\n}}'
         
-        return function_definitions, modified_if_block
+        return function_definitions, modified_if_block, new_function_name
 
     def __extract_internal_conditions(self, code_block, available_vars):
         functions = []
         modified_code_block = code_block
         match_num = 1
+        new_function_name = None  # 변수 선언 위치를 여기로 이동하여 함수 외부에서 접근 가능하도록
         
         def replace_nested_block(match):
-            nonlocal match_num
+            nonlocal match_num, new_function_name
             keyword = match.group(1)  # 조건문 또는 반복문 종류 (if, for, while)
             condition = match.group(2)  # 조건
             body = match.group(3).strip()  # 블록 내부 코드
@@ -639,7 +640,7 @@ class MethodSplit:
         nested_pattern = re.compile(r'(if|for|while)\s*\((.*?)\)\s*\{((?:[^\{\}]|(?R))*)\}', re.MULTILINE | re.DOTALL)
         modified_code_block = nested_pattern.sub(replace_nested_block, code_block)
         
-        return functions, modified_code_block
+        return functions, modified_code_block, new_function_name
 
     # 반환 타입을 결정하는 함수
     def __determine_return_type(self, body, available_vars):
