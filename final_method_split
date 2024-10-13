@@ -1,10 +1,6 @@
-import javalang
-import os
 import re
-import random
 import string
 import secrets
-import regex as re
 
 
 '''
@@ -63,24 +59,50 @@ class MethodSplit:
         else:
             return None  # 메소드 패턴이 일치하지 않을 경우
 
+
     def __extract_try_block_content(self, java_code):
-        pattern = r'(public|private)\s+(\w+)\s+\w+\s*\([^)]*\)\s*\{.*?try\s*\{([\s\S]*?)\s*return\s+(.*?);'
+        # try 블록의 시작을 찾는 정규식 패턴
+        pattern = r'(public|private)\s+(\w+)\s+\w+\s*\([^)]*\)\s*\{.*?try\s*\{'
         match = re.search(pattern, java_code, re.DOTALL)
+
         if match:
-            return_type = match.group(2)
-            content = match.group(3).strip()
-            return_value = match.group(4).strip()
-            return content, return_value, return_type
+            # try 블록의 시작 인덱스
+            start_index = match.end()
+            # 중괄호 개수를 세는 변수를 초기화
+            open_brackets = 1
+            end_index = start_index
+
+            # 중괄호 개수를 기준으로 블록 끝까지 탐색
+            while open_brackets > 0 and end_index < len(java_code):
+                if java_code[end_index] == '{':
+                    open_brackets += 1
+                elif java_code[end_index] == '}':
+                    open_brackets -= 1
+                end_index += 1
+
+            # try 블록의 내용을 추출
+            try_content = java_code[start_index:end_index-1].strip()
+
+            # return 문을 추출하는 정규식 패턴
+            return_pattern = r'return\s+(.*?);'
+            return_match = re.search(return_pattern, try_content)
+
+            if return_match:
+                return_value = return_match.group(1).strip()
+                return_type = match.group(2).strip()
+                return try_content, return_value, return_type
+
         return None, None, None
+
 
     def __has_try_in_body(self, method_body):
         return 'try' in method_body
 
     def __has_while_in_body(self, method_body):
-    # 정규표현식으로 while 구문 찾기
+        # 정규표현식으로 while 구문 찾기
         pattern = r'\bwhile\s*\(.*?\)\s*\{'
         return bool(re.search(pattern, method_body))
-    
+
     def __has_for_in_body(self, method_body):
         # 정규표현식으로 for 구문 찾기
         pattern = r'\bfor\s*\(.*?\)\s*\{'
@@ -156,16 +178,16 @@ class MethodSplit:
                 java_content[:start_index] + modified_body + java_content[end_index - 1:]
         )
 
-        return modified_content   
-    #6
+        return modified_content
+
     def __add_new_method(self, java_content, method_name, new_func):
         method_pattern = re.compile(rf"\b\S+\s+{method_name}\s*\([^)]*\)\s*{{")
-        
+
         match = method_pattern.search(java_content)
         if not match:
             print(f"Method {method_name} not found in the Java content.")
             return None
-        
+
         start_index = match.end()
         open_braces = 1
         end_index = start_index
@@ -187,46 +209,76 @@ class MethodSplit:
             print(new_method_content)
         else:
             new_method_content = f"\n{new_func}\n"
-        
+
         modified_content = (
-            java_content[:end_index] + new_method_content + java_content[end_index:]
+                java_content[:end_index] + new_method_content + java_content[end_index:]
         )
-        
+
         return modified_content
-    
+
+
     def __if_try_catch(self, new_func):
+        # try 블록의 내용과 반환값, 반환 타입을 추출
         try_content, return_value, return_type = self.__extract_try_block_content(new_func)
+
+        # catch 블록의 반환값을 추출하는 함수 추가
+        def extract_catch_return_value(func_content):
+            catch_return_value = None
+            if "catch" in func_content:
+                catch_block = func_content.split("catch")[1]  # catch 이후 블록 추출
+                if "return" in catch_block:
+                    catch_return_value = catch_block.split("return")[1].split(";")[0].strip()  # return 값 추출
+            return catch_return_value
+
+        # catch 블록에서 반환값 추출
+        catch_return_value = extract_catch_return_value(new_func)
+
+        # 기본적으로 반환할 값 설정 (catch 블록의 return 값이 없으면 try 블록의 return 값 사용)
+        final_return_value = catch_return_value if catch_return_value else return_value
+
+        # try 블록과 반환값, 반환 타입이 있으면 새로운 메서드 생성
         if try_content and return_value and return_type:
-                new_func_name = self.__generate_random_string()
-                
-                new_try_func = f"""
-        public {return_type} {new_func_name}({new_func.split('(')[1].split(')')[0]}) {{
-            {try_content}
-            return {return_value};
-        }}
-    """
-                modified_new_func = f"""
-        public {new_func.split()[1]} {new_func.split()[2].split('(')[0]}({new_func.split('(')[1].split(')')[0]}) {{
-            try {{
-                return {new_func_name}({new_func.split('(')[1].split(')')[0].split()[-1]});
-            }} catch (IllegalArgumentException e) {{
-                return {return_value};
+            new_func_name = self.__generate_random_string()
+
+            # 새로운 try 메서드
+            new_try_func = f"""
+            public {return_type} {new_func_name}({new_func.split('(')[1].split(')')[0]}) {{
+                {try_content}
             }}
-        }}
-    """
-                new_method_content = f"\n{modified_new_func}\n{new_try_func}\n"
+        """
+        #     new_try_func = f"""
+        #     public {return_type} {new_func_name}({new_func.split('(')[1].split(')')[0]}) {{
+        #         {try_content}
+        #         return {return_value};
+        #     }}
+        # """
+
+            # 수정된 메서드, catch 블록에서의 return 값을 처리
+            modified_new_func = f"""
+            public {new_func.split()[1]} {new_func.split()[2].split('(')[0]}({new_func.split('(')[1].split(')')[0]}) {{
+                try {{
+                    return {new_func_name}({new_func.split('(')[1].split(')')[0].split()[-1]});
+                }} catch (IllegalArgumentException e) {{
+                    return {final_return_value};
+                }}
+            }}
+        """
+
+            new_method_content = f"\n{modified_new_func}\n{new_try_func}\n"
         else:
-                    new_method_content = f"\n{new_func}\n"
+            new_method_content = f"\n{new_func}\n"
+
         return new_method_content
+
 
     def __if_while_catch(self, new_func):
         # Extract content using the modified function
         while_content, return_type, method_name, declared_variables_before_while, while_condition, after_while_code, statements_before_while, while_start = self.__extract_while_block_content(new_func)
-        
+
         if while_content and return_type and method_name:
             # Extract each line in the while content
             lines = [line.strip() for line in while_content.splitlines() if line.strip()]
-            
+
             method_calls = []
             new_methods = []
             method_count = 1
@@ -242,13 +294,13 @@ class MethodSplit:
                 if variable_to_modify:
                     variable_to_modify = variable_to_modify[0]
                     variable_type = None
-                    
+
                     # Find type from declared variables
                     for var_type, var_name, init_value in declared_variables_before_while:
                         if var_name == variable_to_modify:
                             variable_type = var_type
                             break
-                    
+
                     # Find type from method parameters
                     if not variable_type:
                         for param in param_list:
@@ -258,7 +310,7 @@ class MethodSplit:
 
                     # Create a new function name
                     new_func_name = self.__generate_random_string()
-                    
+
                     # Generate the new method with modified parameters and return type
                     remaining_parameters = ', '.join([param for param in param_list if param.split()[-1] != variable_to_modify])
                     if remaining_parameters:
@@ -286,7 +338,7 @@ class MethodSplit:
         }}
     """
                     method_calls.append(f"{new_func_name}({parameter_names});")
-                
+
                 new_methods.append(new_method)
 
             # Combine method calls into a single string
@@ -314,12 +366,12 @@ class MethodSplit:
         else:
             new_method_content = f"\n{new_func}\n"
         return new_method_content
-    
+
     def __extract_while_block_content(self, java_code):
         # 메서드의 전체 구조를 캡처하는 정규식
         pattern = r'(public|private|protected)\s+(\w+)\s+(\w+)\s*\(.*?\)\s*\{(.*?)\s*while\s*\((.*?)\)\s*\{(.*?)\}(.*)\}'
         match = re.search(pattern, java_code, re.DOTALL)
-        
+
         if match:
             return_type = match.group(2)
             method_name = match.group(3)
@@ -330,25 +382,25 @@ class MethodSplit:
 
             # 변수 선언 추출
             declared_variables_before_while = self.__extract_variable_declarations(before_while_code)
-            
+
             # 모든 구문 추출
             statements_before_while, while_start = self.__extract_statements_before_while(before_while_code)
-            
+
             # `while` 구문을 완성해서 반환
             if not while_start:  # `while`이 추출되지 않았을 경우 수동으로 추가
                 while_start = f"while ({while_condition}) {{"
 
             return while_content, return_type, method_name, declared_variables_before_while, while_condition, after_while_code, statements_before_while, while_start
-        
+
         # None 값 8개 반환
         return None, None, None, None, None, None, None, None
-    
+
     def __extract_variable_declarations(self, code):
         # 변수 선언 및 초기화 추출 (예: int x = 0;, String name = "test";)
         declaration_pattern = r'(\w+)\s+(\w+)\s*(=.*?);'
         declarations = re.findall(declaration_pattern, code)
         return declarations
-    
+
     def __extract_statements_before_while(self, code):
         # while 블록 이전의 모든 구문 추출 (변수 선언이 아닌 일반 구문도 포함)
         statements_pattern = r'((?:.|\n)*?)\s*(while\s*\([^)]*\)\s*\{)'
@@ -358,23 +410,23 @@ class MethodSplit:
             while_start = match.group(2).strip()
             return statements_before_while, while_start  # while 이전의 모든 구문과 while 시작 부분을 추출
         return code.strip(), ""  # while이 없는 경우 전체 코드 반환
-    
+
     def __if_for_catch(self, java_code):
         # `for` 루프의 내용 추출
         loop_condition, loop_content = self.__extract_for_block_content(java_code)
-        
+
         if loop_condition and loop_content:
             # `for` 루프 내부에서 사용되는 변수 추출
             variables = self.__extract_variables_in_for_loop(loop_condition, loop_content)
             variable_parameters = ', '.join([f'int {var}' for var in variables])  # 모든 변수를 `int`로 가정
-            
+
             # `for` 루프 내부의 각 문장을 추출
             lines = [line.strip() for line in loop_content.splitlines() if line.strip()]
-            
+
             method_calls = []
             new_methods = []
             method_count = 1
-            
+
             for line in lines:
                 # 새로운 메서드 이름 생성
                 new_method_name = self.__generate_random_string()
@@ -401,19 +453,19 @@ class MethodSplit:
     """
                     new_methods.append(new_method)
                     method_calls.append(f"{new_method_name}({', '.join(variables)});")
-            
+
             # 기존 `for` 루프를 새 메서드 호출로 변경
             modified_for_loop = f"for ({loop_condition}) {{\n            " + "\n            ".join(method_calls) + "\n        }"
-            
+
             # 새로운 메서드들 추가
             new_method_content = "\n".join(new_methods)
-            
+
             # 기존 코드의 `for` 루프를 변경된 내용으로 대체
             modified_code = re.sub(r'for\s*\(.*?\)\s*\{.*?\}', modified_for_loop, java_code, flags=re.DOTALL)
             modified_code += f"\n{new_method_content}"
-            
+
             return modified_code
-        
+
         # `for` 루프가 없을 경우 원본 코드 반환
         return java_code
 
@@ -426,7 +478,7 @@ class MethodSplit:
             loop_content = match.group(2).strip()
             return loop_condition, loop_content
         return None, None
-    
+
     def __extract_variables_in_for_loop(self, loop_condition, loop_content):
         # `for` 루프의 변수 및 내용에 등장하는 변수 추출
         variable_pattern = r'(\w+)\s*[+\-*/]?='
@@ -434,7 +486,7 @@ class MethodSplit:
         variables_in_content = re.findall(variable_pattern, loop_content)
         variables = set(variables_in_condition + variables_in_content)
         return list(variables)
-    
+
     def __if_main(self, java_code):
         method_data = self.__extract_method_components(java_code)
         for method in method_data:
@@ -449,11 +501,11 @@ class MethodSplit:
             else:
                 final_result = self.__if_if_catch(java_code)
             return final_result
-        
+
     def __extract_method_components(self, java_code):
         method_pattern = re.compile(r'(public|private|protected)\s+(\w+)\s+(\w+)\((.*?)\)\s*\{', re.DOTALL)
         methods = method_pattern.finditer(java_code)
-        
+
         method_data = []
 
         for method in methods:
@@ -463,10 +515,10 @@ class MethodSplit:
 
             # 메서드 전체 본문 추출 (중괄호 짝 맞추기 방식)
             method_body = self.__extract_full_body(java_code, method_body_start)
-            
+
             # if문 추출 (중첩된 if문까지 처리)
             if_statement = self.__extract_if_statement_with_brackets(method_body)
-            
+
             method_data.append({
                 'access_modifier': method.group(1),
                 'return_type': method.group(2),
@@ -477,37 +529,14 @@ class MethodSplit:
             })
 
         return method_data
-    
+
     def __extract_full_body(self, code, start):
         stack = []
         body_start = code.find('{', start)
-        
+
         if body_start == -1:
             return None
-        
-        stack.append('{')
-        body_end = body_start + 1
-        
-        while stack and body_end < len(code):
-            if code[body_end] == '{':
-                stack.append('{')
-            elif code[body_end] == '}':
-                stack.pop()
-            body_end += 1
-        
-        return code[start:body_end]
-    
-    def __extract_if_statement_with_brackets(self, code):
-        if_start = code.find('if')
-        if if_start == -1:
-            return None
-        
-        # 중괄호 짝 맞추기 시작
-        stack = []
-        body_start = code.find('{', if_start)
-        if body_start == -1:
-            return None
-        
+
         stack.append('{')
         body_end = body_start + 1
 
@@ -517,26 +546,49 @@ class MethodSplit:
             elif code[body_end] == '}':
                 stack.pop()
             body_end += 1
-        
+
+        return code[start:body_end]
+
+    def __extract_if_statement_with_brackets(self, code):
+        if_start = code.find('if')
+        if if_start == -1:
+            return None
+
+        # 중괄호 짝 맞추기 시작
+        stack = []
+        body_start = code.find('{', if_start)
+        if body_start == -1:
+            return None
+
+        stack.append('{')
+        body_end = body_start + 1
+
+        while stack and body_end < len(code):
+            if code[body_end] == '{':
+                stack.append('{')
+            elif code[body_end] == '}':
+                stack.pop()
+            body_end += 1
+
         # if문 전체 반환
         return code[if_start:body_end].strip()
-    
+
     def __extract_conditionals_loops(self, if_content):
-    # 첫 번째 if문 전체를 추출하고 그 내부에서 중첩된 if문을 다시 추출
+        # 첫 번째 if문 전체를 추출하고 그 내부에서 중첩된 if문을 다시 추출
         outer_if_pattern = re.search(r'(if|else\s*if|else|for|while|do)\s*\(.*?\)\s*\{(.*)', if_content, re.DOTALL)
         if outer_if_pattern:
             outer_if_content = outer_if_pattern.group(1)  # 첫 번째 if문의 내부 내용
-            
+
             # 중괄호 짝 맞추기 방식으로 중첩된 if문 추출
             stack = []
             if_start = outer_if_content.find('if')
-            
+
             if if_start != -1:
                 # 중괄호 짝 맞추기 시작
                 body_start = outer_if_content.find('{', if_start)
                 if body_start == -1:
                     return None
-                
+
                 stack.append('{')
                 body_end = body_start + 1
 
@@ -546,12 +598,12 @@ class MethodSplit:
                     elif outer_if_content[body_end] == '}':
                         stack.pop()
                     body_end += 1
-                
+
                 # 중첩된 if문 전체를 반환
                 return outer_if_content[if_start:body_end].strip()
-        
+
         return None
-    
+
     def __sub(self, java_code):
         # 첫 번째 if 블록을 추출하는 정규식 (중첩 고려)
         if_pattern = re.compile(r'if\s*\((.*?)\)\s*\{((?:[^\{\}]|(?R))*)\}', re.MULTILINE | re.DOTALL)
@@ -563,18 +615,18 @@ class MethodSplit:
         match = if_pattern.search(java_code)
         if match:
             function_definitions, modified_if_block = self.__replace_first_if_block(match, available_vars)
-            
+
             # 원래 코드에서 첫 번째 if 블록을 수정된 if 블록으로 대체
             modified_code = java_code[:match.start()] + modified_if_block + java_code[match.end():]
-            
+
             # 추출된 함수 정의를 코드 마지막에 추가
             modified_code += '\n' + function_definitions
-            
+
             # 최종 결과 출력
             return modified_code
         else:
             return java_code
-    
+
     def __extract_available_variables(self, java_code):
         declaration_pattern = re.compile(r'\b(int|float|double|String|boolean|char)\s+([a-zA-Z_][a-zA-Z0-9_]*)\b')
         variable_declarations = declaration_pattern.findall(java_code)
@@ -583,42 +635,42 @@ class MethodSplit:
     def __replace_first_if_block(self, match, available_vars):
         condition = match.group(1)  # 첫 번째 if 조건
         code_block = match.group(2).strip()  # 첫 번째 if 블록 내부 코드
-        
+
         # 내부 조건문 또는 반복문을 함수로 분리
         new_functions, modified_code_block = self.__extract_internal_conditions(code_block, available_vars)
-        
+
         # 추출된 함수들 모음 (if 블록 외부에 정의)
         function_definitions = '\n'.join(new_functions)
-        
+
         # 수정된 if 블록 반환 (원래 위치에서 함수 호출로 대체)
         modified_if_block = f'if ({condition}) {{\n    {modified_code_block}\n}}'
-        
+
         return function_definitions, modified_if_block
 
     def __extract_internal_conditions(self, code_block, available_vars):
         functions = []
         modified_code_block = code_block
         match_num = 1
-        
+
         def replace_nested_block(match):
             nonlocal match_num
             keyword = match.group(1)  # 조건문 또는 반복문 종류 (if, for, while)
             condition = match.group(2)  # 조건
             body = match.group(3).strip()  # 블록 내부 코드
-            
+
             # 조건식에서 사용된 변수와 내부 코드에서 사용된 변수 모두 추출
             variable_pattern = re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b')
             condition_vars = set(variable_pattern.findall(condition))
             body_vars = set(variable_pattern.findall(body))
             all_vars = condition_vars.union(body_vars).intersection(available_vars.keys())
-            
+
             # 각 변수의 자료형과 함께 파라미터 문자열 생성
             variables_string = ', '.join([f'{available_vars[var]} {var}' for var in all_vars])
-            
+
             # 새 함수 이름 생성
             new_function_name = f'handleCondition{match_num}'
             match_num += 1
-            
+
             # 새로운 함수 생성
             new_function = f'''
     public void {new_function_name}({variables_string}) {{
@@ -628,15 +680,15 @@ class MethodSplit:
     }}
     '''
             functions.append(new_function)
-            
+
             # 함수 호출로 대체
             return f'{new_function_name}({", ".join(all_vars)});'
-        
+
         # 내부 조건문이나 반복문을 찾아 함수로 변환
         # 조건문이나 반복문을 추출하는 정규식 (if, for, while)
         nested_pattern = re.compile(r'(if|for|while)\s*\((.*?)\)\s*\{((?:[^\{\}]|(?R))*)\}', re.MULTILINE | re.DOTALL)
         modified_code_block = nested_pattern.sub(replace_nested_block, code_block)
-        
+
         return functions, modified_code_block
 
     def __extract_method_by_name(self, java_code, method_name):
@@ -649,7 +701,7 @@ class MethodSplit:
             java_code = java_code[:match.start()] + java_code[match.end():]
             return extracted_method, java_code
         return None, java_code
-    
+
     def __if_if_catch(self, java_code):
         # 메서드 파라미터 추출
         parameters, parameter_types = self.__extract_method_parameters(java_code)
@@ -659,7 +711,7 @@ class MethodSplit:
 
         # `if` 문 추출
         condition, content = self.__extract_if_statement(java_code)
-        
+
         if condition and content:
             # `if` 문 내부에서 사용되는 외부 변수 추출
             variables = self.__extract_variables_in_if_statement(content, parameters)
@@ -680,10 +732,10 @@ class MethodSplit:
                 line = line.strip()
                 if not line:
                     continue
-                
+
                 # 새로운 변수 선언 여부 확인 (예: int square =)
                 declaration_match = re.match(r'(int|String|double|float|char|boolean)\s+(\w+)\s*=\s*(.*);', line)
-                
+
                 # 동적으로 할당 패턴 생성
                 assignment_pattern = r'(' + '|'.join(tracked_variables) + r')\s*=\s*(.*);'
                 assignment_match = re.match(assignment_pattern, line)
@@ -705,7 +757,7 @@ class MethodSplit:
 
                     # 메서드 호출부에 필요한 변수 순서를 맞추기 위한 처리
                     method_calls.append(f"{var_type} {var_name} = {method_name}({', '.join(parameters + list(variables_before_if.keys()))});")
-                    
+
                     # 추적된 변수에 추가
                     new_variables.append((var_type, var_name))
                     tracked_variables.append(var_name)  # 새로 선언된 변수를 추적 목록에 추가
@@ -717,7 +769,7 @@ class MethodSplit:
                     additional_variables = [var_name] if var_name not in tracked_variables else []
                     all_parameters = ', '.join([variable_parameters, dynamic_parameters, additional_parameters]).strip(', ')
                     all_variables = ', '.join(parameters + list(variables_before_if.keys()) + [var_name for _, var_name in new_variables if var_name])
-                    
+
                     new_method = f"""
         public void {method_name}({all_parameters}) {{
             {var_name} = {expression};
@@ -728,7 +780,7 @@ class MethodSplit:
 
                     # 파라미터 순서를 본 메서드의 파라미터, if문 외부 변수, if문 내부 변수 순서로 조정
                     method_calls.append(f"{var_name} = {method_name}({all_variables});")
-                    
+
                     # 추적된 변수에 추가 (여기선 이미 존재하는 변수이므로 새로 추가하지 않음)
                 else:
                     # 중첩된 if/반복문 여부 확인
@@ -772,10 +824,10 @@ class MethodSplit:
 
                         # 메서드 호출 시 정의된 변수 순서에 맞게 파라미터 전달 (본 메서드 파라미터 -> 외부 변수 -> 내부 변수)
                         method_calls.append(f"{method_name}({all_variables});")
-            
+
             # 기존 `if` 문을 새로운 메서드 호출로 변경
             modified_if_block = f"if ({condition}) {{\n            " + "\n            ".join(method_calls) + "\n        }"
-            
+
             # 기존 코드의 `if` 문을 변경된 내용으로 대체
             modified_code = re.sub(r'if\s*\(.*?\)\s*\{.*?\}', modified_if_block, java_code, flags=re.DOTALL)
             modified_code += "\n" + "\n".join(new_methods)
@@ -812,7 +864,7 @@ class MethodSplit:
             if re.match(r'if\s*\(', line):
                 # `if` 문이 시작되면 그 전까지의 변수를 모두 처리
                 break
-            
+
             match = re.match(pattern, line)
             if match:
                 var_type, var_name, expression = match.groups()
@@ -834,7 +886,7 @@ class MethodSplit:
         # `if` 문 내부에서 사용되는 변수 추출
         variable_pattern = r'\b(' + '|'.join(parameters) + r')\b'
         variables_in_content = re.findall(variable_pattern, content)
-        
+
         return list(set(variables_in_content))
 
     def __extract_all_variables(self, line):
@@ -846,5 +898,3 @@ class MethodSplit:
     def __reattach_method(self, java_code, method_code):
         # 추출한 메서드를 코드 뒤에 붙이는 함수
         return java_code.strip() + "\n\n" + method_code.strip()
-    
-    
