@@ -201,13 +201,8 @@ class MethodSplit:
                 
                 new_try_func = f"""
         public {return_type} {new_func_name}({new_func.split('(')[1].split(')')[0]}) {{
-            try {{
-                {try_content}
-                return {return_value};
-            }} catch (Exception e) {{
-                e.printStackTrace();
-                return null;
-            }}
+            {try_content}
+            return {return_value};
         }}
     """
                 modified_new_func = f"""
@@ -269,26 +264,16 @@ class MethodSplit:
                     if remaining_parameters:
                         new_method = f"""
         public {variable_type} {new_func_name}({variable_type} {variable_to_modify}, {remaining_parameters}) {{
-            try {{
-                {line}
-                return {variable_to_modify};
-            }} catch (Exception e) {{
-                e.printStackTrace();
-                return null;
-            }}
+            {line}
+            return {variable_to_modify};
         }}
     """
                         method_calls.append(f"{variable_to_modify} = {new_func_name}({variable_to_modify}, {', '.join([param.split()[-1] for param in param_list if param.split()[-1] != variable_to_modify])});")
                     else:
                         new_method = f"""
         public {variable_type} {new_func_name}({variable_type} {variable_to_modify}) {{
-            try {{
-                {line}
-                return {variable_to_modify};
-            }} catch (Exception e) {{
-                e.printStackTrace();
-                return null;
-            }}
+            {line}
+            return {variable_to_modify};
         }}
     """
                         method_calls.append(f"{variable_to_modify} = {new_func_name}({variable_to_modify});")
@@ -297,14 +282,9 @@ class MethodSplit:
                     new_func_name = self.__generate_random_string()
                     new_method = f"""
         public void {new_func_name}({parameters}) {{
-            try {{
-                {line}
-            }} catch (Exception e) {{
-                e.printStackTrace();
-            }}
+            {line}
         }}
     """
-
                     method_calls.append(f"{new_func_name}({parameter_names});")
                 
                 new_methods.append(new_method)
@@ -322,16 +302,12 @@ class MethodSplit:
             # Restore the modified function
             modified_new_func = f"""
         public {new_func.split()[1]} {new_func.split()[2].split('(')[0]}({parameters}) {{
-            try {{
-                {statements_before_while}
-                {variable_declarations}
-                {while_start}
-                    {method_calls_str}
-                }}
-                {after_while_code}
-            }} catch (Exception e) {{
-                e.printStackTrace();
+            {statements_before_while}
+            {variable_declarations}
+            {while_start}
+                {method_calls_str}
             }}
+            {after_while_code}
         }}
     """
             new_method_content = f"\n{modified_new_func}\n" + "\n".join(new_methods) + "\n"
@@ -410,13 +386,8 @@ class MethodSplit:
                     # 새 메서드 생성 (변경된 변수 반환)
                     new_method = f"""
         public int {new_method_name}({variable_parameters}) {{
-            try {{
-                {line}
-                return {modified_variable};
-            }} catch (Exception e) {{
-                e.printStackTrace();
-                return -1;
-            }}
+            {line}
+            return {modified_variable};
         }}
     """
                     new_methods.append(new_method)
@@ -425,14 +396,9 @@ class MethodSplit:
                     # 새 메서드 생성 (변경된 변수가 없는 경우)
                     new_method = f"""
         public void {new_method_name}({variable_parameters}) {{
-            try {{
-                {line}
-            }} catch (Exception e) {{
-                e.printStackTrace();
-            }}
+            {line}
         }}
     """
-
                     new_methods.append(new_method)
                     method_calls.append(f"{new_method_name}({', '.join(variables)});")
             
@@ -731,13 +697,8 @@ class MethodSplit:
                     # 새 메서드 생성
                     new_method = f"""
         public {var_type} {method_name}({combined_parameters}) {{
-            try {{
-                {var_type} {var_name} = {expression};
-                return {var_name};
-            }} catch (Exception e) {{
-                e.printStackTrace();
-                return null; // 또는 var_type에 맞는 예외 처리 값
-            }}
+            {var_type} {var_name} = {expression};
+            return {var_name};
         }}
     """
                     new_methods.append(new_method)
@@ -758,13 +719,9 @@ class MethodSplit:
                     all_variables = ', '.join(parameters + list(variables_before_if.keys()) + [var_name for _, var_name in new_variables if var_name])
                     
                     new_method = f"""
-        public {var_type} {method_name}({all_parameters}) {{
-            try {{
-                {var_name} = {expression};
-                return {var_name}; 
-            }} catch (Exception e) {{
-                e.printStackTrace();
-            }}
+        public void {method_name}({all_parameters}) {{
+            {var_name} = {expression};
+            return {var_name};
         }}
     """
                     new_methods.append(new_method)
@@ -789,11 +746,7 @@ class MethodSplit:
                         combined_parameters = ', '.join([variable_parameters, dynamic_parameters, parameter_str]).strip(', ')
                         new_method = f"""
         public void {method_name}({combined_parameters}) {{
-            try {{
-                {line.strip()}
-            }} catch (Exception e) {{
-                e.printStackTrace();
-            }}
+            {line.strip()}
         }}
     """
                         new_methods.append(new_method)
@@ -812,14 +765,9 @@ class MethodSplit:
                         # 새로운 메서드 생성 (변수 순서를 정의된 순서와 맞추도록 처리)
                         new_method = f"""
         public void {method_name}({all_parameters}) {{
-            try {{
-                {line}
-            }} catch (Exception e) {{
-                e.printStackTrace();
-            }}
+            {line}
         }}
     """
-
                         new_methods.append(new_method)
 
                         # 메서드 호출 시 정의된 변수 순서에 맞게 파라미터 전달 (본 메서드 파라미터 -> 외부 변수 -> 내부 변수)
