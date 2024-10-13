@@ -4,7 +4,7 @@ import re
 import random
 import string
 import secrets
-
+import regex as re
 
 '''
 1. body부분 식별(메서드 이름과 body부분 코드 반환)
@@ -64,6 +64,11 @@ def find_body(java_file_path):
 
     return methods
 #2번
+def check_for_conditionals_loops(if_content):
+    print(if_content)
+    # 조건문과 반복문이 있는지 확인
+    conditional_pattern = re.compile(r'if\s*\(.*?\)|while\s*\(.*?\)|for\s*\(.*?\)')
+    return bool(conditional_pattern.search(if_content))
 #try-catch
 def extract_try_block_content(java_code):
     pattern = r'(public|private)\s+(\w+)\s+\w+\s*\([^)]*\)\s*\{.*?try\s*\{([\s\S]*?)\s*return\s+(.*?);'
@@ -135,6 +140,108 @@ def has_if_in_body(method_body):
     pattern = r'\bif\s*\(.*?\)\s*\{'
     return bool(re.search(pattern, method_body))
 
+def extract_method_components(java_code):
+    method_pattern = re.compile(r'(public|private|protected)\s+(\w+)\s+(\w+)\((.*?)\)\s*\{', re.DOTALL)
+    methods = method_pattern.finditer(java_code)
+    
+    method_data = []
+
+    for method in methods:
+        # 메서드 시그니처 및 본문 추출
+        method_signature = method.group(0)
+        method_body_start = method.end()  # 본문 시작 위치
+
+        # 메서드 전체 본문 추출 (중괄호 짝 맞추기 방식)
+        method_body = extract_full_body(java_code, method_body_start)
+        
+        # if문 추출 (중첩된 if문까지 처리)
+        if_statement = extract_if_statement_with_brackets(method_body)
+        
+        method_data.append({
+            'access_modifier': method.group(1),
+            'return_type': method.group(2),
+            'method_name': method.group(3),
+            'parameters': method.group(4),
+            'body': method_body,
+            'if_content': if_statement
+        })
+
+    return method_data
+
+def extract_if_statement_with_brackets(code):
+    if_start = code.find('if')
+    if if_start == -1:
+        return None
+    
+    # 중괄호 짝 맞추기 시작
+    stack = []
+    body_start = code.find('{', if_start)
+    if body_start == -1:
+        return None
+    
+    stack.append('{')
+    body_end = body_start + 1
+
+    while stack and body_end < len(code):
+        if code[body_end] == '{':
+            stack.append('{')
+        elif code[body_end] == '}':
+            stack.pop()
+        body_end += 1
+    
+    # if문 전체 반환
+    return code[if_start:body_end].strip()
+
+def extract_full_body(code, start):
+    stack = []
+    body_start = code.find('{', start)
+    
+    if body_start == -1:
+        return None
+    
+    stack.append('{')
+    body_end = body_start + 1
+    
+    while stack and body_end < len(code):
+        if code[body_end] == '{':
+            stack.append('{')
+        elif code[body_end] == '}':
+            stack.pop()
+        body_end += 1
+    
+    return code[start:body_end]
+
+def extract_conditionals_loops(if_content):
+    # 첫 번째 if문 전체를 추출하고 그 내부에서 중첩된 if문을 다시 추출
+    outer_if_pattern = re.search(r'(if|else\s*if|else|for|while|do)\s*\(.*?\)\s*\{(.*)', if_content, re.DOTALL)
+    if outer_if_pattern:
+        outer_if_content = outer_if_pattern.group(1)  # 첫 번째 if문의 내부 내용
+        
+        # 중괄호 짝 맞추기 방식으로 중첩된 if문 추출
+        stack = []
+        if_start = outer_if_content.find('if')
+        
+        if if_start != -1:
+            # 중괄호 짝 맞추기 시작
+            body_start = outer_if_content.find('{', if_start)
+            if body_start == -1:
+                return None
+            
+            stack.append('{')
+            body_end = body_start + 1
+
+            while stack and body_end < len(outer_if_content):
+                if outer_if_content[body_end] == '{':
+                    stack.append('{')
+                elif outer_if_content[body_end] == '}':
+                    stack.pop()
+                body_end += 1
+            
+            # 중첩된 if문 전체를 반환
+            return outer_if_content[if_start:body_end].strip()
+    
+    return None
+
 def extract_if_statement(java_code):
     # `if` 문과 그 내부 내용을 추출하는 정규식
     pattern = r'if\s*\((.*?)\)\s*\{(.*?)\}'
@@ -144,6 +251,25 @@ def extract_if_statement(java_code):
         content = match.group(2).strip()
         return condition, content
     return None, None
+
+def extract_variables_before_if(java_code):
+    # `if` 문이 나오기 전에 선언된 변수들을 추출
+    lines = java_code.splitlines()
+    variables = {}
+    pattern = r'(int|String|double|float|char|boolean)\s+(\w+)\s*=\s*(.*);'
+
+    for line in lines:
+        line = line.strip()
+        if re.match(r'if\s*\(', line):
+            # `if` 문이 시작되면 그 전까지의 변수를 모두 처리
+            break
+        
+        match = re.match(pattern, line)
+        if match:
+            var_type, var_name, expression = match.groups()
+            variables[var_name] = var_type
+
+    return variables
 
 def extract_method_parameters(java_code):
     # 메서드 시그니처에서 파라미터와 타입을 추출
@@ -168,6 +294,257 @@ def extract_variables_in_if_statement(content, parameters):
     
     return list(set(variables_in_content))
 
+def extract_all_variables(line):
+    # 코드에서 사용된 변수들을 추출하는 함수
+    variable_pattern = r'\b\w+\b'
+    variables = re.findall(variable_pattern, line)
+    return list(set(variables))
+
+def if_if_catch(java_code):
+    # 메서드 파라미터 추출
+    parameters, parameter_types = extract_method_parameters(java_code)
+
+    # `if` 문 앞에 선언된 변수들 추출
+    variables_before_if = extract_variables_before_if(java_code)
+
+    # `if` 문 추출
+    condition, content = extract_if_statement(java_code)
+    
+    if condition and content:
+        # `if` 문 내부에서 사용되는 외부 변수 추출
+        variables = extract_variables_in_if_statement(content, parameters)
+
+        # 추출한 변수 타입과 이름을 파라미터로 할당
+        dynamic_parameters = ', '.join([f'{var_type} {var_name}' for var_name, var_type in variables_before_if.items()])
+        variable_parameters = ', '.join([f'{parameter_types[var]} {var}' for var in parameters])  # 메서드 파라미터 기반 파라미터 생성
+
+        method_calls = []
+        new_methods = []
+        method_count = 1
+        new_variables = []  # 새로 생성된 변수 추적
+
+        # 기존 변수 추적
+        tracked_variables = list(variables_before_if.keys()) + parameters
+
+        for line in content.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 새로운 변수 선언 여부 확인 (예: int square =)
+            declaration_match = re.match(r'(int|String|double|float|char|boolean)\s+(\w+)\s*=\s*(.*);', line)
+            
+            # 동적으로 할당 패턴 생성
+            assignment_pattern = r'(' + '|'.join(tracked_variables) + r')\s*=\s*(.*);'
+            assignment_match = re.match(assignment_pattern, line)
+
+            if declaration_match:
+                var_type, var_name, expression = declaration_match.groups()
+                method_name = f"generatedIfMethod{method_count}"
+                method_count += 1
+
+                # 메서드 생성시 동적으로 파라미터 할당 (정의 순서를 일치시키기 위해 변수 추가 순서 주의)
+                combined_parameters = ', '.join([variable_parameters, dynamic_parameters]).strip(', ')
+                # 새 메서드 생성
+                new_method = f"""
+    public {var_type} {method_name}({combined_parameters}) {{
+        {var_type} {var_name} = {expression};
+        return {var_name};
+    }}
+"""
+                new_methods.append(new_method)
+
+                # 메서드 호출부에 필요한 변수 순서를 맞추기 위한 처리
+                method_calls.append(f"{var_type} {var_name} = {method_name}({', '.join(parameters + list(variables_before_if.keys()))});")
+                
+                # 추적된 변수에 추가
+                new_variables.append((var_type, var_name))
+                tracked_variables.append(var_name)  # 새로 선언된 변수를 추적 목록에 추가
+            elif assignment_match:
+                var_name, expression = assignment_match.groups()
+                method_name = f"generatedIfMethod{method_count}"
+                method_count += 1
+
+                # 할당문에서 사용된 변수도 파라미터로 추가해야 함
+                additional_variables = [var_name] if var_name not in tracked_variables else []
+                all_parameters = ', '.join([variable_parameters, dynamic_parameters, additional_parameters]).strip(', ')
+                all_variables = ', '.join(parameters + list(variables_before_if.keys()) + [var_name for _, var_name in new_variables if var_name])
+                
+                new_method = f"""
+    public void {method_name}({all_parameters}) {{
+        {var_name} = {expression};
+        return {var_name};
+    }}
+"""
+                new_methods.append(new_method)
+
+                # 파라미터 순서를 본 메서드의 파라미터, if문 외부 변수, if문 내부 변수 순서로 조정
+                method_calls.append(f"{var_name} = {method_name}({all_variables});")
+                
+                # 추적된 변수에 추가 (여기선 이미 존재하는 변수이므로 새로 추가하지 않음)
+            else:
+                # 중첩된 if/반복문 여부 확인
+                if has_if_in_body(line):
+                    method_name = f"generatedIfMethod{method_count}"
+                    method_count += 1
+
+                    # 중첩된 if 문이나 반복문 안에서 사용된 변수를 모두 파악
+                    variables_in_line = extract_all_variables(line)
+
+                    # 중복 파라미터를 제거하고 필요한 경우에만 추가
+                    unique_variables = [var for var in variables_in_line if var not in parameters]
+                    parameter_str = ', '.join([f'int {var}' for var in unique_variables])
+
+                    # 새로운 메서드를 동적으로 생성, 변수 포함
+                    combined_parameters = ', '.join([variable_parameters, dynamic_parameters, parameter_str]).strip(', ')
+                    new_method = f"""
+    public void {method_name}({combined_parameters}) {{
+        {line.strip()}
+    }}
+"""
+                    new_methods.append(new_method)
+
+                    # 파라미터 순서를 본 메서드의 파라미터, if문 외부 변수, if문 내부 변수 순서로 조정
+                    method_calls.append(f"{method_name}({', '.join(parameters + list(variables_before_if.keys()) + unique_variables)});")
+                else:
+                    # 일반적인 메서드 생성
+                    method_name = f"generatedIfMethod{method_count}"
+                    method_count += 1
+
+                    # 새로 선언된 변수와 외부 변수를 파라미터에 추가
+                    additional_parameters = ', '.join([f'{var_type} {var_name}' for var_type, var_name in new_variables if var_type])
+                    all_parameters = ', '.join([variable_parameters, dynamic_parameters, additional_parameters]).strip(', ')
+                    all_variables = ', '.join(parameters + list(variables_before_if.keys()) + [var_name for _, var_name in new_variables if var_name])
+
+                    # 새로운 메서드 생성 (변수 순서를 정의된 순서와 맞추도록 처리)
+                    new_method = f"""
+    public void {method_name}({all_parameters}) {{
+        {line}
+    }}
+"""
+                    new_methods.append(new_method)
+
+                    # 메서드 호출 시 정의된 변수 순서에 맞게 파라미터 전달 (본 메서드 파라미터 -> 외부 변수 -> 내부 변수)
+                    method_calls.append(f"{method_name}({all_variables});")
+        
+        # 기존 `if` 문을 새로운 메서드 호출로 변경
+        modified_if_block = f"if ({condition}) {{\n            " + "\n            ".join(method_calls) + "\n        }"
+        
+        # 기존 코드의 `if` 문을 변경된 내용으로 대체
+        modified_code = re.sub(r'if\s*\(.*?\)\s*\{.*?\}', modified_if_block, java_code, flags=re.DOTALL)
+        modified_code += "\n" + "\n".join(new_methods)
+
+        return modified_code
+
+    # `if` 문이 없을 경우 원본 코드 반환
+    return java_code
+
+# 내부 조건문 또는 반복문을 함수로 변환
+def extract_internal_conditions(code_block, available_vars):
+    functions = []
+    modified_code_block = code_block
+    match_num = 1
+    
+    def replace_nested_block(match):
+        nonlocal match_num
+        keyword = match.group(1)  # 조건문 또는 반복문 종류 (if, for, while)
+        condition = match.group(2)  # 조건
+        body = match.group(3).strip()  # 블록 내부 코드
+        
+        # 조건식에서 사용된 변수와 내부 코드에서 사용된 변수 모두 추출
+        variable_pattern = re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b')
+        condition_vars = set(variable_pattern.findall(condition))
+        body_vars = set(variable_pattern.findall(body))
+        all_vars = condition_vars.union(body_vars).intersection(available_vars.keys())
+        
+        # 각 변수의 자료형과 함께 파라미터 문자열 생성
+        variables_string = ', '.join([f'{available_vars[var]} {var}' for var in all_vars])
+        
+        # 새 함수 이름 생성
+        new_function_name = f'handleCondition{match_num}'
+        match_num += 1
+        
+        # 새로운 함수 생성
+        new_function = f'''
+public void {new_function_name}({variables_string}) {{
+    {keyword} ({condition}) {{
+        {body}
+    }}
+}}
+'''
+        functions.append(new_function)
+        
+        # 함수 호출로 대체
+        return f'{new_function_name}({", ".join(all_vars)});'
+    
+    # 내부 조건문이나 반복문을 찾아 함수로 변환
+    # 조건문이나 반복문을 추출하는 정규식 (if, for, while)
+    nested_pattern = re.compile(r'(if|for|while)\s*\((.*?)\)\s*\{((?:[^\{\}]|(?R))*)\}', re.MULTILINE | re.DOTALL)
+    modified_code_block = nested_pattern.sub(replace_nested_block, code_block)
+    
+    return functions, modified_code_block
+
+# 첫 번째 if 블록 추출 및 내부 블록 분할
+def replace_first_if_block(match, available_vars):
+    condition = match.group(1)  # 첫 번째 if 조건
+    code_block = match.group(2).strip()  # 첫 번째 if 블록 내부 코드
+    
+    # 내부 조건문 또는 반복문을 함수로 분리
+    new_functions, modified_code_block = extract_internal_conditions(code_block, available_vars)
+    
+    # 추출된 함수들 모음 (if 블록 외부에 정의)
+    function_definitions = '\n'.join(new_functions)
+    
+    # 수정된 if 블록 반환 (원래 위치에서 함수 호출로 대체)
+    modified_if_block = f'if ({condition}) {{\n    {modified_code_block}\n}}'
+    
+    return function_definitions, modified_if_block
+
+# checkNumber 메서드에서 사용된 변수 목록과 자료형을 추출 (동적 파라미터 관리를 위해)
+def extract_available_variables(java_code):
+    declaration_pattern = re.compile(r'\b(int|float|double|String|boolean|char)\s+([a-zA-Z_][a-zA-Z0-9_]*)\b')
+    variable_declarations = declaration_pattern.findall(java_code)
+    return {var_name: var_type for var_type, var_name in variable_declarations}
+
+def sub(java_code):
+    # 첫 번째 if 블록을 추출하는 정규식 (중첩 고려)
+    if_pattern = re.compile(r'if\s*\((.*?)\)\s*\{((?:[^\{\}]|(?R))*)\}', re.MULTILINE | re.DOTALL)
+
+    # 사용된 변수 목록을 추출 (변수명과 자료형)
+    available_vars = extract_available_variables(java_code)
+
+    # 첫 번째 if 블록을 찾아서 처리
+    match = if_pattern.search(java_code)
+    if match:
+        function_definitions, modified_if_block = replace_first_if_block(match, available_vars)
+        
+        # 원래 코드에서 첫 번째 if 블록을 수정된 if 블록으로 대체
+        modified_code = java_code[:match.start()] + modified_if_block + java_code[match.end():]
+        
+        # 추출된 함수 정의를 코드 마지막에 추가
+        modified_code += '\n' + function_definitions
+        
+        # 최종 결과 출력
+        return modified_code
+    else:
+        return java_code
+
+def extract_method_by_name(java_code, method_name):
+    # 중첩된 중괄호를 처리하여 메서드 전체를 추출하는 정규식 패턴
+    pattern = rf'public void {method_name}\(.*?\)\s*\{{(?:[^\{{\}}]*|\{{[^\{{\}}]*\}})*\}}'
+    match = re.search(pattern, java_code, re.DOTALL)
+    if match:
+        # 매칭된 메서드를 저장하고, 원래 코드에서 삭제
+        extracted_method = match.group(0)  # 전체 메서드 내용을 추출
+        java_code = java_code[:match.start()] + java_code[match.end():]
+        return extracted_method, java_code
+    return None, java_code
+
+def reattach_method(java_code, method_code):
+    # 추출한 메서드를 코드 뒤에 붙이는 함수
+    return java_code.strip() + "\n\n" + method_code.strip()
+
+#for검사
 def extract_for_block_content(java_code):
     # `for` 루프와 그 내부 내용을 추출하는 정규식
     pattern = r'for\s*\((.*?)\)\s*\{(.*?)\}'
@@ -186,7 +563,6 @@ def extract_variables_in_for_loop(loop_condition, loop_content):
     variables = set(variables_in_condition + variables_in_content)
     return list(variables)
 
-#for검사
 def has_for_in_body(method_body):
     return 'for' in method_body
 
@@ -428,77 +804,20 @@ def if_for_catch(java_code):
     # `for` 루프가 없을 경우 원본 코드 반환
     return java_code
 
-def if_if_catch(java_code):
-    # 메서드 파라미터 추출
-    parameters, parameter_types = extract_method_parameters(java_code)
-
-    # `if` 문 추출
-    condition, content = extract_if_statement(java_code)
-    
-    if condition and content:
-        # `if` 문 내부에서 사용되는 외부 변수 추출
-        variables = extract_variables_in_if_statement(content, parameters)
-        variable_parameters = ', '.join([f'{parameter_types[var]} {var}' for var in variables])  # 변수 타입을 기반으로 파라미터 생성
-        
-        method_calls = []
-        new_methods = []
-        method_count = 1
-        new_variables = []  # 새로 생성된 변수 추적
-        
-        for line in content.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            
-            # 새로운 변수 선언 여부 확인 (예: int square =)
-            declaration_match = re.match(r'(int|String|double|float|char|boolean)\s+(\w+)\s*=\s*(.*);', line)
-            if declaration_match:
-                var_type, var_name, expression = declaration_match.groups()
-                method_name = f"generatedIfMethod{method_count}"
-                method_count += 1
-                
-                # 새 메서드 생성
-                new_method = f"""
-    public {var_type} {method_name}({variable_parameters}) {{
-        {var_type} {var_name} = {expression};
-        return {var_name};
-    }}
-"""
-                new_methods.append(new_method)
-                method_calls.append(f"{var_type} {var_name} = {method_name}({', '.join(variables)});")
-                
-                # 추적된 변수에 추가
-                new_variables.append((var_type, var_name))
-            else:
-                # 새로운 메서드 이름 생성
-                method_name = f"generatedIfMethod{method_count}"
-                method_count += 1
-
-                # 새로 선언된 변수들을 파라미터에 추가
-                additional_parameters = ', '.join([f'{var_type} {var_name}' for var_type, var_name in new_variables])
-                all_parameters = f'{variable_parameters}, {additional_parameters}'.strip(', ')
-                all_variables = ', '.join(variables + [var_name for _, var_name in new_variables])
-                
-                # 새로운 메서드 생성
-                new_method = f"""
-    public void {method_name}({all_parameters}) {{
-        {line}
-    }}
-"""
-                new_methods.append(new_method)
-                method_calls.append(f"{method_name}({all_variables});")
-        
-        # 기존 `if` 문을 새로운 메서드 호출로 변경
-        modified_if_block = f"if ({condition}) {{\n            " + "\n            ".join(method_calls) + "\n        }"
-        
-        # 기존 코드의 `if` 문을 변경된 내용으로 대체
-        modified_code = re.sub(r'if\s*\(.*?\)\s*\{.*?\}', modified_if_block, java_code, flags=re.DOTALL)
-        modified_code += "\n" + "\n".join(new_methods)
-        
-        return modified_code
-
-    # `if` 문이 없을 경우 원본 코드 반환
-    return java_code
+def if_main(java_code):
+    method_data = extract_method_components(java_code)
+    for method in method_data:
+        sum = extract_conditionals_loops(method['if_content'])
+        if sum:
+            modified_code = sub(java_code)
+            method_name = "handleCondition1"
+            extracted_method, code_without_handle = extract_method_by_name(modified_code,method_name)
+            result_after_if_catch = if_if_catch(code_without_handle)
+            # 처리된 코드 뒤에 handleCondition1 메서드를 다시 붙임
+            final_result = reattach_method(result_after_if_catch, extracted_method)
+        else:
+            final_result = if_if_catch(java_code)
+        return final_result
 
 #6번
 def add_new_method(java_content, method_name, new_func):
@@ -526,7 +845,7 @@ def add_new_method(java_content, method_name, new_func):
     elif has_for_in_body(new_func):
         new_method_content = if_for_catch(new_func)
     elif has_if_in_body(new_func):
-        new_method_content = if_if_catch(new_func)
+        new_method_content = if_main(new_func)
         print(new_method_content)
     else:
         new_method_content = f"\n{new_func}\n"
@@ -542,7 +861,7 @@ def save_file_with_encoding(file_path, content):
         file.write(content)
         
 def main():
-    folder_path = 'E:/f_flow/testfile/NYBus/NYBus/app/src/main/java/sample/mindorks/com/nybus/activities'
+    folder_path = 'E:/f_flow/java-christmas-6-scienceNH/src/main/java/christmas'
     
     java_files = find_java_files(folder_path)
     
@@ -559,7 +878,6 @@ def main():
 
             java_content = add_new_method(java_content, method_name, new_func)
             print(java_content)
-            break
         # save_file_with_encoding(java_file, java_content)
         # print(f"File saved: {java_file}")
 
