@@ -441,7 +441,7 @@ class MethodSplit:
             sum = self.__extract_conditionals_loops(method['if_content'])
             if sum:
                 modified_code = self.__sub(java_code)
-                method_name = "handleCondition1"
+                method_name = self.__generate_random_string()
                 extracted_method, code_without_handle = self.__extract_method_by_name(modified_code,method_name)
                 result_after_if_catch = self.__if_if_catch(code_without_handle)
                 # 처리된 코드 뒤에 handleCondition1 메서드를 다시 붙임
@@ -615,13 +615,15 @@ class MethodSplit:
             # 각 변수의 자료형과 함께 파라미터 문자열 생성
             variables_string = ', '.join([f'{available_vars[var]} {var}' for var in all_vars])
             
+            # 반환 타입 동적으로 추출 (available_vars에서 할당된 변수 타입으로 결정)
+            return_type = self.__determine_return_type(body, available_vars)
+            
             # 새 함수 이름 생성
-            new_function_name = f'handleCondition{match_num}'
-            match_num += 1
+            new_function_name = self.__generate_random_string()
             
             # 새로운 함수 생성
             new_function = f'''
-    public void {new_function_name}({variables_string}) {{
+    public {return_type} {new_function_name}({variables_string}) {{
         {keyword} ({condition}) {{
             {body}
         }}
@@ -639,17 +641,44 @@ class MethodSplit:
         
         return functions, modified_code_block
 
+    # 반환 타입을 결정하는 함수
+    def __determine_return_type(self, body, available_vars):
+        # return 문을 찾아 반환되는 변수가 있는지 확인
+        return_match = re.search(r'\breturn\s+(\w+);', body)
+        
+        if return_match:
+            return_var = return_match.group(1)
+            # 반환되는 변수가 available_vars에 있다면 해당 변수의 타입을 반환
+            if return_var in available_vars:
+                return available_vars[return_var]
+        
+        # 반환되는 변수가 없거나 available_vars에 없는 경우 void 반환
+        return "void"
+    
     def __extract_method_by_name(self, java_code, method_name):
-        # 중첩된 중괄호를 처리하여 메서드 전체를 추출하는 정규식 패턴
-        pattern = rf'public void {method_name}\(.*?\)\s*\{{(?:[^\{{\}}]*|\{{[^\{{\}}]*\}})*\}}'
+    # 중첩된 중괄호를 처리하여 메서드 전체를 추출하는 정규식 패턴
+        pattern = rf'public\s+\w+\s+{method_name}\(.*?\)\s*\{{(?:[^\{{\}}]*|\{{[^\{{\}}]*\}})*\}}'
         match = re.search(pattern, java_code, re.DOTALL)
+        
         if match:
             # 매칭된 메서드를 저장하고, 원래 코드에서 삭제
             extracted_method = match.group(0)  # 전체 메서드 내용을 추출
             java_code = java_code[:match.start()] + java_code[match.end():]
             return extracted_method, java_code
-        return None, java_code
-    
+        else:
+            # 메서드를 찾지 못한 경우 적절히 처리
+            print(f"Method {method_name} not found.")
+            return None, java_code  # None을 반환하더라도 호출부에서 처리할 수 있도록
+
+    def __determine_return_type(self, body):
+        # 내부 코드 분석 후 반환 타입 결정 (여기선 간단하게 void로 처리하지만 실제로는 계산이나 반환값 분석 필요)
+        if "return" in body:
+            # 반환 타입이 특정한 값인 경우, 간단히 int로 가정(수정필요)
+            return "int"
+        else:
+            # 반환문이 없는 경우 void 반환
+            return "void"
+       
     def __if_if_catch(self, java_code):
         # 메서드 파라미터 추출
         parameters, parameter_types = self.__extract_method_parameters(java_code)
@@ -844,7 +873,11 @@ class MethodSplit:
         return list(set(variables))
 
     def __reattach_method(self, java_code, method_code):
-        # 추출한 메서드를 코드 뒤에 붙이는 함수
+        # method_code가 None일 경우 처리
+        if method_code is None:
+            print("No method to reattach.")
+            return java_code.strip()
+        
         return java_code.strip() + "\n\n" + method_code.strip()
     
     
